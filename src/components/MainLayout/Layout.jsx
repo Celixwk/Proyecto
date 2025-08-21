@@ -1,0 +1,42 @@
+import React, { useState } from "react";
+import { Outlet } from "react-router-dom";
+import { Menu } from "lucide-react";
+import Sidebar from "@/components/Sidebar/Sidebar";
+import UserMenu from "@/components/Auth/UserMenu";
+
+export default function MainLayout() {
+  const [mobileOpen, setMobileOpen] = useState(false);
+
+  return (
+    <div className="flex h-screen bg-gray-50">
+      {/* Sidebar (off-canvas en móvil) */}
+      <Sidebar mobileOpen={mobileOpen} setMobileOpen={setMobileOpen} className="shrink-0" />
+
+      {/* Columna derecha */}
+      <div className="flex-1 flex flex-col overflow-hidden">
+        {/* TOPBAR */}
+        <header className="h-14 border-b bg-white flex items-center justify-between px-4 sticky top-0 z-20">
+          {/* botón hamburguesa solo en móvil */}
+          <button
+            className="md:hidden inline-flex items-center gap-2 rounded-md border px-2 py-1.5 hover:bg-gray-50"
+            onClick={() => setMobileOpen(true)}
+            aria-label="Abrir menú"
+          >
+            <Menu className="h-5 w-5" />
+            <span className="text-sm">Menú</span>
+          </button>
+
+          <div className="flex-1" />
+
+          {/* menú de usuario */}
+          <UserMenu />
+        </header>
+
+        {/* Contenido */}
+        <main className="flex-1 overflow-y-auto p-6">
+          <Outlet />
+        </main>
+      </div>
+    </div>
+  );
+}
