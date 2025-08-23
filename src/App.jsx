@@ -3,15 +3,11 @@ import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/context/AuthContext";
 
+import ProtectedRoute from "@/routes/ProtectedRoute";
 import MainLayout from "@/components/MainLayout/Layout";
 
-import ProtectedRoute from "@/routes/ProtectedRoute";
-
-import InicioPage from "@/pages/Inicio/InicioPage";
 import LoginPage from "@/pages/Auth/LoginPage";
 import RegisterPage from "@/pages/Auth/RegisterPage";
-import DevicesPage from "@/pages/Devices/DevicesPage";
-import UsersPage from "@/pages/Admin/UsersPage";
 
 import OverviewSection from "@/components/Overview/OverviewSection";
 import ComponentsSection from "@/components/ComponentsSection/ComponentsSection";
@@ -21,6 +17,7 @@ import ValveSection from "@/components/ValveSection/ValveSection";
 import MathematicsSection from "@/components/MathematicsSection/MathematicsSection";
 import ApplicationsSection from "@/components/ApplicationsSection/ApplicationsSection";
 import DevicesSection from "@/components/DevicesSection/DevicesSection";
+import UsersPage from "@/pages/Admin/UsersPage";
 
 function NotFound() {
   return (
@@ -30,26 +27,22 @@ function NotFound() {
     </div>
   );
 }
-console.log("App render")
+
 export default function App() {
   return (
-    // Si aún no tienes AuthProvider, cambia por <React.Fragment>
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          {/* Redirige raíz a /inicio */}
-          <Route path="/" element={<Navigate to="/dispositivos" replace />} />
+          {/* Siempre arrancar en login */}
+          <Route path="/" element={<Navigate to="/login" replace />} />
 
           {/* Públicas */}
-          <Route path="/dispositivos" element={<InicioPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
-          <Route path="/inicio" element={<Navigate to="/dispositivos" replace />} />
 
-          {/* Protegidas (dashboard) */}
+          {/* Protegidas */}
           <Route element={<ProtectedRoute />}>
             <Route path="/app" element={<MainLayout />}>
-              <Route index element={<OverviewSection />} />
               <Route index element={<OverviewSection />} />
               <Route path="overview" element={<OverviewSection />} />
               <Route path="components" element={<ComponentsSection />} />
@@ -58,24 +51,17 @@ export default function App() {
               <Route path="valve" element={<ValveSection />} />
               <Route path="mathematics" element={<MathematicsSection />} />
               <Route path="applications" element={<ApplicationsSection />} />
-              <Route path="devices" element={<DevicesPage />} />
-              <Route path="admin/users" element={<UsersPage />} />
               <Route path="devices" element={<DevicesSection />} />
-              <Route path="*" element={<NotFound />} />
 
-              {/* --- ADMIN --- */}
+              {/* Solo admin */}
               <Route element={<ProtectedRoute requireAdmin />}>
                 <Route path="admin/users" element={<UsersPage />} />
               </Route>
 
-              {/* 404 dentro de /app */}
+              {/* 404 dentro del layout */}
               <Route path="*" element={<NotFound />} />
             </Route>
           </Route>
-
-          <Route element={<ProtectedRoute requireAdmin />}></Route>
-          <Route path="/admin/users" element={<div className="p-6">Gestión de usuarios (admin)</div>} />
-          
 
           {/* 404 global */}
           <Route path="*" element={<NotFound />} />
