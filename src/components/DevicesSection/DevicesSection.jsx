@@ -1,52 +1,184 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { Radar, RefreshCw, Plus, MapPin, Wifi, Power, Clock } from "lucide-react";
+import {
+  Radar, RefreshCw, Plus, MapPin, Wifi, Power, Clock,
+  Droplets, Activity, Settings, Wrench
+} from "lucide-react";
+import FirmwareModal from "@/components/DevicesSection/FirmwareModal";
+import SystemDetailsModal from "@/components/DevicesSection/SystemDetailsModal";
+const LS_KEY = "gd_systems";
 
-const LS_KEY = "gd_devices";
-
-const loadDevices = () => {
-  try { return JSON.parse(localStorage.getItem(LS_KEY) || "[]"); } catch { return []; }
+const loadSystems = () => {
+  try { return JSON.parse(localStorage.getItem(LS_KEY) || "[]"); }
+  catch { return []; }
 };
-const saveDevices = (arr) => {
+const saveSystems = (arr) => {
   try { localStorage.setItem(LS_KEY, JSON.stringify(arr)); } catch {}
 };
 
-// (opcional) seed de demo si está vacío
+// MIGRACIÓN: junta los 3 dispositivos sueltos (gd_devices) en 1 sistema con controller (ESP32)
+const migrateLegacyIfNeeded = () => {
+  try {
+    const legacy = JSON.parse(localStorage.getItem("gd_devices") || "[]");
+    const current = loadSystems();
+    if (current.length || !Array.isArray(legacy) || legacy.length === 0) return;
+
+    const modules = [];
+    const pick = (type, fallbackName) => {
+      const found = legacy.find(d => (d.type || "").toLowerCase().includes(type));
+      if (!found) return null;
+      return {
+        key: type, // "nivel" | "sensor" | "actuador"
+        name: found.name || fallbackName,
+        status: found.status || "online",
+        signal: found.signal ?? 0,
+        location: found.location || "",
+        lastSeen: found.lastSeen || new Date().toISOString(),
+      };
+    };
+    const mTank   = pick("nivel",    "Tanque 500L");
+    const mSensor = pick("sensor",   "Sensor HC-SR04");
+    const mValve  = pick("actuador", "Válvula Solenoide");
+    if (mTank)   modules.push(mTank);
+    if (mSensor) modules.push(mSensor);
+    if (mValve)  modules.push(mValve);
+
+    // Controller (ESP32) derivado: online si alguno online; señal = máx; lastSeen más reciente.
+    const anyOnline = legacy.some(d => d.status === "online");
+    const bestSignal = Math.max(0, ...legacy.map(d => d.signal ?? 0));
+    const lastSeen = legacy
+      .map(d => new Date(d.lastSeen || Date.now()).getTime())
+      .reduce((a, b) => Math.max(a, b), Date.now());
+
+    const system = {
+      id: "sys-" + Math.random().toString(36).slice(2, 8),
+      name: "Sistema de Agua #1",
+      location: mTank?.location || mSensor?.location || mValve?.location || "Planta piloto",
+      createdAt: new Date().toISOString(),
+      controller: {
+        status: anyOnline ? "online" : "offline",
+        signal: bestSignal,
+        lastSeen: new Date(lastSeen).toISOString(),
+      },
+      modules,
+    };
+
+    saveSystems([system]);
+    // Opcional: limpiar lo viejo
+    // localStorage.removeItem("gd_devices");
+  } catch {}
+};
+
+// SEED de demo si no hay nada
 const seedIfEmpty = () => {
-  const cur = loadDevices();
+  const cur = loadSystems();
   if (cur.length) return cur;
-  const seed = [
-    { id:"dev-001", name:"Tanque 500L", type:"nivel",    status:"online",  location:"Bloque A • Lab 1", signal:92, lastSeen:new Date().toISOString() },
-    { id:"dev-002", name:"Sensor HC-SR04", type:"sensor",  status:"offline", location:"Bloque B • Sala 3", signal:0,  lastSeen:new Date(Date.now()-42*60*1000).toISOString() },
-    { id:"dev-003", name:"Válvula Solenoide", type:"actuador", status:"online",  location:"Planta piloto",       signal:77, lastSeen:new Date(Date.now()-3*60*1000).toISOString() },
-  ];
-  saveDevices(seed);
-  return seed;
+
+  const demo = [{
+    id: "sys-001",
+    name: "Sistema de Agua #1",
+    location: "Planta piloto",
+    createdAt: new Date().toISOString(),
+    controller: {
+      status: "online",
+      signal: 88,
+      lastSeen: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
+    },
+    modules: [
+      {
+        key: "nivel", name: "Tanque 500L", status: "online", signal: 92,
+        location: "Bloque A • Lab 1",
+        lastSeen: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
+      },
+      {
+        key: "sensor", name: "Sensor HC-SR04", status: "offline", signal: 0,
+        location: "Bloque B • Sala 3",
+        lastSeen: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
+      },
+      {
+        key: "actuador", name: "Válvula Solenoide", status: "online", signal: 77,
+        location: "Planta piloto",
+        lastSeen: new Date(Date.now() - 6 * 24 * 60 * 60 * 1000).toISOString(),
+      },
+    ],
+  }];
+
+  saveSystems(demo);
+  return demo;
 };
 
 const timeAgo = (iso) => {
   try {
     const diff = Date.now() - new Date(iso).getTime();
-    const m = Math.floor(diff/60000);
+    const m = Math.floor(diff / 60000);
     if (m < 1) return "ahora";
     if (m < 60) return `${m} min`;
-    const h = Math.floor(m/60);
+    const h = Math.floor(m / 60);
     if (h < 24) return `${h} h`;
-    const d = Math.floor(h/24);
+    const d = Math.floor(h / 24);
     return `${d} d`;
   } catch { return "—"; }
 };
 
+const ModuleChip = ({ m }) => {
+  const Icon =
+    m.key === "nivel" ? Droplets :
+    m.key === "sensor" ? Activity :
+    Settings;
+  const color =
+    m.status === "online" ? "bg-green-100 text-green-700" : "bg-rose-100 text-rose-700";
+  return (
+    <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ${color}`}>
+      <Icon className="h-3.5 w-3.5" />
+      {m.name}
+    </span>
+  );
+};
+
 export default function DevicesSection() {
-  const [devices, setDevices] = useState([]);
+  const [systems, setSystems] = useState([]);
+  const [openFw, setOpenFw] = useState(false);
+  const [currentSystem, setCurrentSystem] = useState(null);
+  const [openDetails, setOpenDetails] = useState(false);
 
-  useEffect(() => { setDevices(seedIfEmpty()); }, []);
+
+  useEffect(() => {
+    migrateLegacyIfNeeded();
+    setSystems(seedIfEmpty());
+  }, []);
+
+  // MÉTRICAS desde controller
   const metrics = useMemo(() => {
-    const total = devices.length;
-    const online = devices.filter(d => d.status === "online").length;
-    return { total, online, offline: total - online };
-  }, [devices]);
+    const total = systems.length;
+    const online = systems.filter(sys => sys.controller?.status === "online").length;
+    const offline = total - online;
+    return { total, online, offline };
+  }, [systems]);
 
-  const refresh = () => setDevices(loadDevices());
+  const refresh = () => setSystems(loadSystems());
+
+  const addSystem = () => {
+    const next = [
+      ...systems,
+      {
+        id: "sys-" + Math.random().toString(36).slice(2, 8),
+        name: `Sistema de Agua #${systems.length + 1}`,
+        location: "Planta piloto",
+        createdAt: new Date().toISOString(),
+        controller: {
+          status: "online",
+          signal: 80,
+          lastSeen: new Date().toISOString(),
+        },
+        modules: [
+          { key: "nivel", name: "Tanque 500L", status: "online", signal: 90, location: "Bloque A", lastSeen: new Date().toISOString() },
+          { key: "sensor", name: "Sensor HC-SR04", status: "online", signal: 88, location: "Bloque A", lastSeen: new Date().toISOString() },
+          { key: "actuador", name: "Válvula Solenoide", status: "online", signal: 86, location: "Bloque A", lastSeen: new Date().toISOString() },
+        ],
+      }
+    ];
+    saveSystems(next);
+    setSystems(next);
+  };
 
   return (
     <div className="max-w-6xl mx-auto">
@@ -57,17 +189,8 @@ export default function DevicesSection() {
           <button onClick={refresh} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-gray-50">
             <RefreshCw className="h-4 w-4" /> Refrescar
           </button>
-          <button
-            onClick={() => {
-              const next = [
-                ...devices,
-                { id:`dev-${Math.random().toString(36).slice(2,7)}`, name:"Dispositivo nuevo", type:"sensor", status:"online", location:"Ubicación", signal:65, lastSeen:new Date().toISOString() },
-              ];
-              saveDevices(next); setDevices(next);
-            }}
-            className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700"
-          >
-            <Plus className="h-4 w-4" /> Agregar dispositivo
+          <button onClick={addSystem} className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700">
+            <Plus className="h-4 w-4" /> Agregar sistema
           </button>
         </div>
       </div>
@@ -89,65 +212,128 @@ export default function DevicesSection() {
       </div>
 
       {/* Vacío */}
-      {devices.length === 0 ? (
+      {systems.length === 0 ? (
         <div className="rounded-2xl border bg-white p-10 text-center">
           <div className="mx-auto mb-4 grid h-14 w-14 place-items-center rounded-full bg-gray-100">
             <Radar className="h-7 w-7 text-gray-500" />
           </div>
-          <h2 className="text-lg font-semibold text-gray-900">Sin dispositivos</h2>
-          <p className="mt-1 text-sm text-gray-600">Cuando conectes tus dispositivos aparecerán aquí.</p>
+          <h2 className="text-lg font-semibold text-gray-900">Sin sistemas</h2>
+          <p className="mt-1 text-sm text-gray-600">Cuando conectes tu ESP32 aparecerá aquí.</p>
           <button onClick={refresh} className="mt-5 rounded-md border px-3 py-2 text-sm hover:bg-gray-50">
             Volver a intentar
           </button>
         </div>
       ) : (
-        /* Grid de cards */
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {devices.map((d) => (
-            <article key={d.id} className="rounded-2xl border bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
-              <div className="flex items-start justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="grid h-10 w-10 place-items-center rounded-xl bg-blue-50">
-                    <Radar className="h-5 w-5 text-blue-600" />
-                  </div>
-                  <div>
-                    <h3 className="font-semibold text-gray-900">{d.name}</h3>
-                    <p className="text-xs text-gray-500 capitalize">{d.type}</p>
-                  </div>
-                </div>
-                <span className={`rounded-full px-2 py-0.5 text-xs ${d.status === "online" ? "bg-green-100 text-green-700" : "bg-rose-100 text-rose-700"}`}>
-                  {d.status === "online" ? "En línea" : "Fuera de línea"}
-                </span>
-              </div>
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {systems.map((sys) => {
+            const online = sys.controller?.status === "online";
+            const statusClass = online ? "bg-green-100 text-green-700" : "bg-rose-100 text-rose-700";
+            const statusLabel = online ? "En línea" : "Fuera de línea";
+            const refSignal = sys.controller?.signal ?? 0;
+            const lastSeen = sys.controller?.lastSeen || sys.modules[0]?.lastSeen;
 
-              <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
-                <div className="flex items-center gap-2 text-gray-700">
-                  <MapPin className="h-4 w-4 text-gray-400" /> <span className="truncate" title={d.location}>{d.location}</span>
+            return (
+              <article key={sys.id} className="rounded-2xl border bg-white p-4 shadow-sm hover:shadow-md transition-shadow">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="flex items-center gap-3">
+                    <div className="grid h-10 w-10 place-items-center rounded-xl bg-blue-50">
+                      <Radar className="h-5 w-5 text-blue-600" />
+                    </div>
+                    <div>
+                      <h3 className="font-semibold text-gray-900">{sys.name}</h3>
+                      <p className="text-xs text-gray-500">{sys.location}</p>
+                    </div>
+                  </div>
+                  <span className={`rounded-full px-2 py-0.5 text-xs ${statusClass}`}>
+                    {statusLabel}
+                  </span>
                 </div>
-                <div className="flex items-center gap-2 text-gray-700">
-                  <Wifi className="h-4 w-4 text-gray-400" /> Señal: {d.signal}%
-                </div>
-                <div className="flex items-center gap-2 text-gray-700">
-                  <Clock className="h-4 w-4 text-gray-400" /> Hace {timeAgo(d.lastSeen)}
-                </div>
-                <div className="flex items-center gap-2 text-gray-700">
-                  <Power className="h-4 w-4 text-gray-400" /> ID: <span className="font-mono text-xs">{d.id}</span>
-                </div>
-              </div>
 
-              <div className="mt-4 flex items-center justify-end gap-2">
-                <button className="rounded-md border px-3 py-1.5 text-xs hover:bg-gray-50">Ver detalles</button>
-                <button
-                  className="rounded-md border px-3 py-1.5 text-xs hover:bg-gray-50"
-                  onClick={() => { const next = devices.filter(x => x.id !== d.id); saveDevices(next); setDevices(next); }}
-                >
-                  Eliminar
-                </button>
-              </div>
-            </article>
-          ))}
+                {/* Módulos */}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {sys.modules.map((m, i) => (<ModuleChip key={i} m={m} />))}
+                </div>
+
+                {/* Info rápida (desde controller) */}
+                <div className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                  <div className="flex items-center gap-2 text-gray-700">
+                    <MapPin className="h-4 w-4 text-gray-400" /> <span className="truncate" title={sys.location}>{sys.location}</span>
+                  </div>
+                  <div className="flex items-center gap-2 text-gray-700">
+                    <Wifi className="h-4 w-4 text-gray-400" /> Señal: {refSignal}%
+                  </div>
+                  <div className="flex items-center gap-2 text-gray-700">
+                    <Clock className="h-4 w-4 text-gray-400" /> Actualizado: {timeAgo(lastSeen)}
+                  </div>
+                  <div className="flex items-center gap-2 text-gray-700">
+                    <Power className="h-4 w-4 text-gray-400" /> ID: <span className="font-mono text-xs">{sys.id}</span>
+                  </div>
+                </div>
+
+                <div className="mt-4 flex items-center justify-end gap-2">
+                  {(() => {
+                    const btn = {
+                      primary:
+                        "inline-flex items-center gap-2 rounded-md bg-indigo-600 px-3 py-1.5 text-xs text-white hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-indigo-300",
+                      outline:
+                        "inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-gray-200",
+                      danger:
+                        "inline-flex items-center gap-2 rounded-md border border-red-200 px-3 py-1.5 text-xs text-red-600 hover:bg-red-50 focus:outline-none focus:ring-2 focus:ring-red-200",
+                    };
+
+                    return (
+                      <>
+                        <button
+                          className={btn.primary}
+                          onClick={() => {
+                            setCurrentSystem(sys);
+                            setOpenDetails(true);
+                          }}
+                        >
+                          Ver detalles
+                        </button>
+
+                        <button
+                          className={btn.outline}
+                          onClick={() => {
+                            setCurrentSystem(sys);
+                            setOpenFw(true);
+                          }}
+                        >
+                          Configurar
+                        </button>
+
+                        <button
+                          className={btn.danger}
+                          onClick={() => {
+                            const next = systems.filter((x) => x.id !== sys.id);
+                            saveSystems(next);
+                            setSystems(next);
+                          }}
+                        >
+                          Eliminar
+                        </button>
+                      </>
+                    );
+                  })()}
+                </div>
+              </article>
+            );
+          })}
         </div>
       )}
+
+      <FirmwareModal
+        open={openFw}
+        onClose={() => setOpenFw(false)}
+        device={currentSystem}
+      />
+
+      <SystemDetailsModal
+        open={openDetails}
+        onClose={() => setOpenDetails(false)}
+        system={currentSystem}    
+      />
     </div>
   );
 }
