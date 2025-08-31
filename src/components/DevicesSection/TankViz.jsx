@@ -1,154 +1,210 @@
 // src/components/DevicesSection/TankViz.jsx
-import React from "react";
+import React, { useId, useMemo } from "react";
 
 /**
- * Props:
- * - level: 0..100 (porcentaje)
- * - capacityLiters: número (ej. 500)
- * - valveOpen: boolean (true = abierta)
- * - trend: "up" | "down" | "steady"
+ * TankViz
+ * - level: 0..100 (%)
+ * - capacityLiters: número (ej. 500)  -> usado para mostrar litros
+ * - variant: "rect" | "drum" | "cyl"
+ * - indicator: "chip" | "bar" | "none"
+ * - valveOpen: true/false
+ * - showValveLabel: mostrar texto en el chip (por defecto true)
+ * - showHeader: muestra el título interno "Tanque XXX L" (por defecto false)
+ * - showPercent: muestra %/litros arriba a la derecha (por defecto true)
+ * - className: estilos extra
  */
 export default function TankViz({
-  level = 50,
+  level = 60,
   capacityLiters = 500,
-  valveOpen = false,
-  trend = "steady",
+  variant = "rect",
+  indicator = "chip",
+  valveOpen = true,
+  showValveLabel = true,
+  showHeader = false,
+  showPercent = true,
+  className = "",
 }) {
-  const clamped = Math.max(0, Math.min(100, level));
-  const liters = Math.round((clamped / 100) * capacityLiters);
+  const rid = typeof useId === "function" ? useId() : `id-${Math.random().toString(36).slice(2)}`;
+  const clipId = `${rid}-clip`;
+  const gradId = `${rid}-grad`;
+
+  const W = 260;
+  const H = 180;
+  const viewBox = `0 0 ${W} ${H}`;
+
+  // Forma base (sin escalera ni tapones)
+  const shape = useMemo(() => {
+    switch (variant) {
+      case "drum": {
+        const x = 40, y = 26, w = 180, h = 130, r = 20;
+        return {
+          content: { x, y, w, h },
+          clipPath: <path d={roundedRectPath(x, y, w, h, r)} />,
+          outline: <path d={roundedRectPath(x, y, w, h, r)} stroke="#0f172a" strokeWidth="3" fill="none" />,
+        };
+      }
+      case "cyl": {
+        const x = 30, y = 40, w = 200, h = 100, r = 50;
+        return {
+          content: { x, y, w, h },
+          clipPath: <rect x={x} y={y} width={w} height={h} rx={r} ry={r} />,
+          outline: <rect x={x} y={y} width={w} height={h} rx={r} ry={r} stroke="#0f172a" strokeWidth="3" fill="none" />,
+        };
+      }
+      case "rect":
+      default: {
+        const x = 30, y = 20, w = 180, h = 140, r = 12;
+        return {
+          content: { x, y, w, h },
+          clipPath: <rect x={x} y={y} width={w} height={h} rx={r} ry={r} />,
+          outline: <rect x={x} y={y} width={w} height={h} rx={r} ry={r} stroke="#0f172a" strokeWidth="3" fill="none" />,
+        };
+      }
+    }
+  }, [variant]);
+
+  // nivel / agua
+  const { x, y, w, h } = shape.content;
+  const pct = Math.max(0, Math.min(100, level));
+  const waterTop = y + (1 - pct / 100) * h;
+
+  // NEW: litros calculados desde capacidad y porcentaje
+  const liters = Math.max(0, Math.round((capacityLiters || 0) * (pct / 100))); // NEW
+  const litersText = capacityLiters > 0 ? `${liters.toLocaleString()} L` : ""; // NEW
+
+  const valveColor = valveOpen ? "#10b981" : "#ef4444";
+  const valveText  = valveOpen ? "Válvula abierta" : "Válvula cerrada";
+
+  // burbujas (recortadas al tanque)
+  const bubbles = useMemo(
+    () =>
+      Array.from({ length: 8 }).map((_, i) => {
+        const bx = x + 16 + ((i * 27) % (w - 32));
+        const delay = (i * 0.6).toFixed(2) + "s";
+        const dur = (3 + (i % 3)) + "s";
+        const r = 2 + (i % 3);
+        return (
+          <circle
+            key={i}
+            cx={bx}
+            cy={y + h - 6}
+            r={r}
+            fill="rgba(255,255,255,.85)"
+            style={{ animation: `bubbleUp ${dur} ease-in infinite`, animationDelay: delay }}
+          />
+        );
+      }),
+    [x, y, w, h]
+  );
 
   return (
-    <div className="rounded-2xl border bg-white p-4 shadow-sm">
-      {/* CSS local para las animaciones */}
-      <style>{`
-        .tviz-wrap { position: relative; height: 240px; }
-        .tviz-tank {
-          position: absolute; inset: 8px 18px 8px 8px;
-          border-radius: 16px; border: 2px solid #e5e7eb; overflow: hidden;
-          background: linear-gradient(180deg, #f9fafb 0%, #f3f4f6 100%);
-        }
-        .tviz-water {
-          position: absolute; left:0; right:0; bottom:0;
-          background: linear-gradient(180deg, #60a5fa 0%, #2563eb 100%);
-          transition: height 600ms ease;
-        }
-        /* Onda superficial */
-        .tviz-wave {
-          position:absolute; left:-20%; right:-20%; top:-18px; height:40px;
-          background: radial-gradient(40px 22px at 20px 20px, rgba(255,255,255,.9) 40%, rgba(255,255,255,0) 41%) repeat-x;
-          background-size: 40px 22px;
-          opacity:.35;
-          animation: tviz-wave 4s linear infinite;
-        }
-        .tviz-wave2 {
-          top:-12px; opacity:.25; animation-duration: 6.5s; animation-direction: reverse;
-        }
-        @keyframes tviz-wave {
-          0% { transform: translateX(0); }
-          100% { transform: translateX(40px); }
-        }
-
-        /* Barrita lateral de la válvula */
-        .tviz-valve {
-          position:absolute; top:12px; bottom:12px; right:6px; width:10px; border-radius:10px; overflow:hidden;
-        }
-        .tviz-valve.open { background: linear-gradient(180deg, #34d399, #059669); }
-        .tviz-valve.closed { background: linear-gradient(180deg, #fb7185, #ef4444); }
-        .tviz-valve .flow {
-          position:absolute; inset:0;
-          background: linear-gradient(180deg, transparent, rgba(255,255,255,.7), transparent);
-          background-size: 100% 120%;
-          opacity:.6;
-          animation: tviz-flow 1.2s linear infinite;
-        }
-        .tviz-valve.closed .flow {
-          animation: tviz-pulse 1.2s ease-in-out infinite;
-          background: rgba(255,255,255,.35);
-        }
-        @keyframes tviz-flow {
-          0% { background-position-y: 120%; }
-          100% { background-position-y: -20%; }
-        }
-        @keyframes tviz-pulse {
-          0%,100% { opacity:.3; } 50% { opacity:.8; }
-        }
-
-        /* Burbujas (nivel subiendo) */
-        .tviz-bubble {
-          position:absolute; bottom:8px; left:25%; width:8px; height:8px;
-          border-radius:9999px; background: rgba(255,255,255,.9);
-          animation: tviz-bubble 2.2s ease-in infinite;
-        }
-        .tviz-bubble:nth-child(2) { left:48%; animation-delay: .4s; }
-        .tviz-bubble:nth-child(3) { left:70%; animation-delay: .9s; }
-        @keyframes tviz-bubble {
-          0% { transform: translateY(0) scale(1); opacity:.9; }
-          80% { opacity:.6; }
-          100% { transform: translateY(-120px) scale(.6); opacity:0; }
-        }
-
-        /* Goteo (nivel bajando) */
-        .tviz-drop {
-          position:absolute; top:-16px; left:50%; margin-left:-6px;
-          width:12px; height:18px;
-          background: #60a5fa; border-radius: 50% 50% 60% 60%/55% 55% 45% 45%;
-          box-shadow: inset 0 0 4px rgba(255,255,255,.7);
-          animation: tviz-drop 1.6s ease-in infinite;
-        }
-        .tviz-drop:nth-child(2) { left:30%; animation-delay:.5s; }
-        .tviz-drop:nth-child(3) { left:70%; animation-delay:1s; }
-        @keyframes tviz-drop {
-          0% { transform: translateY(0) scale(1); opacity: 0; }
-          10% { opacity: 1; }
-          90% { opacity: .95; }
-          100% { transform: translateY(120px) scale(.9); opacity: 0; }
-        }
-      `}</style>
-
-      <div className="mb-3 flex items-center justify-between">
-        <h4 className="text-sm font-semibold text-gray-700">
-          Tanque ({capacityLiters} L)
-        </h4>
-        <div className="text-xs text-gray-500">
-          {liters} L • {clamped}% {trend === "up" ? "↗" : trend === "down" ? "↘" : ""}
+    <div className={`rounded-2xl border bg-white p-4 shadow-sm ${className}`}>
+      {showHeader && (
+        <div className="mb-2 flex items-baseline justify-between">
+          <h3 className="font-semibold text-gray-900">Tanque {capacityLiters.toLocaleString()} L</h3>
+          {/* NEW: % + litros juntos */}
+          <span className="text-sm text-gray-500">
+            {pct}%{capacityLiters > 0 ? ` • ${litersText}` : ""}
+          </span>
         </div>
-      </div>
+      )}
 
-      <div className="tviz-wrap">
-        {/* Contenedor visual del tanque */}
-        <div className="tviz-tank">
-          {/* Contenido de agua */}
+      <div className="relative mx-auto aspect-[13/9] w-full max-w-[520px]">
+        {/* indicador tipo chip (fuera del SVG, no tapa el tanque) */}
+        {indicator === "chip" && (
           <div
-            className="tviz-water"
-            style={{ height: `${clamped}%` }}
+            className={`absolute left-2 top-2 inline-flex items-center gap-2 rounded-full px-2.5 py-0.5 text-xs font-medium shadow-sm
+              ${valveOpen ? "bg-emerald-50 text-emerald-700" : "bg-rose-50 text-rose-700"}`}
           >
-            {/* Olas superficiales */}
-            <div className="tviz-wave" />
-            <div className="tviz-wave tviz-wave2" />
-
-            {/* Partículas según tendencia */}
-            {trend === "up" && (
-              <>
-                <div className="tviz-bubble" />
-                <div className="tviz-bubble" />
-                <div className="tviz-bubble" />
-              </>
-            )}
-            {trend === "down" && (
-              <>
-                <div className="tviz-drop" />
-                <div className="tviz-drop" />
-                <div className="tviz-drop" />
-              </>
-            )}
+            <span
+              className="inline-block h-2.5 w-2.5 rounded-full"
+              style={{ background: valveColor }}
+              aria-hidden
+            />
+            {showValveLabel && <span>{valveText}</span>}
           </div>
-        </div>
+        )}
 
-        {/* Barrita de estado (válvula) */}
-        <div className={`tviz-valve ${valveOpen ? "open" : "closed"}`}>
-          <div className="flow" />
-        </div>
+        {/* % (y litros) arriba a la derecha cuando no usamos header */}
+        {!showHeader && showPercent && (
+          <div className="absolute right-2 top-2 rounded-full bg-white/70 px-2 py-0.5 text-xs text-gray-700 backdrop-blur">
+            {pct}%{capacityLiters > 0 ? ` • ${litersText}` : ""} {/* NEW */}
+          </div>
+        )}
+
+        <svg viewBox={viewBox} className="h-full w-full">
+          <defs>
+            <clipPath id={clipId}>{shape.clipPath}</clipPath>
+
+            <linearGradient id={gradId} x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor="#60a5fa" />
+              <stop offset="100%" stopColor="#2563eb" />
+            </linearGradient>
+
+            <style>{`
+              @keyframes waveShift { 0% { transform: translateX(0); } 100% { transform: translateX(-140px); } }
+              @keyframes bob      { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-2px); } }
+              @keyframes bubbleUp { 0% { transform: translateY(0); opacity: .0; }
+                                     10% { opacity: .8; }
+                                     100% { transform: translateY(-${h - 14}px); opacity: 0; } }
+              .wave1 { animation: waveShift 5s linear infinite, bob 4s ease-in-out infinite; }
+              .wave2 { animation: waveShift 9s linear infinite, bob 6s ease-in-out infinite; opacity: .55; }
+            `}</style>
+          </defs>
+
+          {/* agua recortada a la forma */}
+          <g clipPath={`url(#${clipId})`}>
+            <rect x={x} y={waterTop} width={w} height={y + h - waterTop} fill={`url(#${gradId})`} />
+
+            <g transform={`translate(${x}, ${waterTop - 12})`}>
+              <path className="wave1" d={wavePath(w + 240, 10, 24)} fill={`url(#${gradId})`} />
+              <path className="wave2" d={wavePath(w + 240, 12, 18)} fill="#3b82f6" />
+            </g>
+
+            {bubbles}
+          </g>
+
+          {/* contorno */}
+          {shape.outline}
+
+          {/* indicador tipo barra (opcional) */}
+          {indicator === "bar" && (
+            <g transform={`translate(${12}, ${y})`}>
+              <rect x="0" y="8" width="6" height={h - 16} rx="3" fill={valveColor} />
+            </g>
+          )}
+        </svg>
       </div>
     </div>
   );
+}
+
+/* ---------------- helpers SVG ---------------- */
+
+function roundedRectPath(x, y, w, h, r) {
+  return [
+    `M ${x + r},${y}`,
+    `H ${x + w - r}`,
+    `A ${r},${r} 0 0 1 ${x + w},${y + r}`,
+    `V ${y + h - r}`,
+    `A ${r},${r} 0 0 1 ${x + w - r},${y + h}`,
+    `H ${x + r}`,
+    `A ${r},${r} 0 0 1 ${x},${y + h - r}`,
+    `V ${y + r}`,
+    `A ${r},${r} 0 0 1 ${x + r},${y}`,
+    "Z",
+  ].join(" ");
+}
+
+// ola (ancho, amplitud, periodo)
+function wavePath(width = 200, amp = 10, period = 24) {
+  const step = period;
+  const midY = amp;
+  let d = `M 0 ${midY}`;
+  for (let xx = 0; xx <= width + step; xx += step) {
+    const yy = midY + Math.sin((xx / period) * Math.PI * 2) * amp * 0.6;
+    d += ` L ${xx} ${yy}`;
+  }
+  d += ` L ${width} ${amp * 2 + 40} L 0 ${amp * 2 + 40} Z`;
+  return d;
 }

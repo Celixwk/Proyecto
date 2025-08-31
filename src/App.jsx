@@ -1,5 +1,6 @@
+// src/App.jsx
 import React from "react";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/context/AuthContext";
 
@@ -8,6 +9,9 @@ import MainLayout from "@/components/MainLayout/Layout";
 
 import LoginPage from "@/pages/Auth/LoginPage";
 import RegisterPage from "@/pages/Auth/RegisterPage";
+
+import PublicLayout from "@/components/PublicLayout/PublicLayout";
+import DocsPublic from "@/pages/Public/DocsPublic";
 
 import OverviewSection from "@/components/Overview/OverviewSection";
 import ComponentsSection from "@/components/ComponentsSection/ComponentsSection";
@@ -33,14 +37,15 @@ export default function App() {
     <AuthProvider>
       <BrowserRouter>
         <Routes>
-          {/* Siempre arrancar en login */}
-          <Route path="/" element={<Navigate to="/login" replace />} />
-
-          {/* Públicas */}
+          {/* --- Públicas --- */}
+          <Route element={<PublicLayout />}>
+            <Route index element={<DocsPublic />} />        {/* / */}
+            <Route path="docs" element={<DocsPublic />} />  {/* /docs */}
+          </Route>
           <Route path="/login" element={<LoginPage />} />
           <Route path="/register" element={<RegisterPage />} />
 
-          {/* Protegidas */}
+          {/* --- Protegidas (/app/**) --- */}
           <Route element={<ProtectedRoute />}>
             <Route path="/app" element={<MainLayout />}>
               <Route index element={<OverviewSection />} />
@@ -58,7 +63,6 @@ export default function App() {
                 <Route path="admin/users" element={<UsersPage />} />
               </Route>
 
-              {/* 404 dentro del layout */}
               <Route path="*" element={<NotFound />} />
             </Route>
           </Route>
@@ -67,6 +71,7 @@ export default function App() {
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
+
       <Toaster position="top-right" richColors />
     </AuthProvider>
   );

@@ -139,12 +139,20 @@ export default function DevicesSection() {
   const [openFw, setOpenFw] = useState(false);
   const [currentSystem, setCurrentSystem] = useState(null);
   const [openDetails, setOpenDetails] = useState(false);
-
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     migrateLegacyIfNeeded();
     setSystems(seedIfEmpty());
   }, []);
+
+  useEffect(() => {
+  const onStorage = (e) => {
+    if (e.key === LS_KEY) setSystems(loadSystems());
+  };
+  window.addEventListener("storage", onStorage);
+  return () => window.removeEventListener("storage", onStorage);
+}, []);
 
   // MÉTRICAS desde controller
   const metrics = useMemo(() => {
@@ -154,7 +162,11 @@ export default function DevicesSection() {
     return { total, online, offline };
   }, [systems]);
 
-  const refresh = () => setSystems(loadSystems());
+  const refresh = () => {
+  setRefreshing(true);
+  setSystems(loadSystems());
+  setTimeout(() => setRefreshing(false), 500);
+};
 
   const addSystem = () => {
     const next = [
@@ -186,8 +198,12 @@ export default function DevicesSection() {
       <div className="mb-6 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <h1 className="text-xl font-bold">Dispositivos</h1>
         <div className="flex items-center gap-2">
-          <button onClick={refresh} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-gray-50">
-            <RefreshCw className="h-4 w-4" /> Refrescar
+          <button
+            onClick={refresh}
+            disabled={refreshing}
+            className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm hover:bg-gray-50 disabled:opacity-60">
+            <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
+            {refreshing ? "Actualizando…" : "Refrescar"}
           </button>
           <button onClick={addSystem} className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700">
             <Plus className="h-4 w-4" /> Agregar sistema
