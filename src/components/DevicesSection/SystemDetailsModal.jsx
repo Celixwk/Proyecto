@@ -2,7 +2,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   X, MapPin, Wifi, Clock, Download, PlusCircle,
-  Droplets, Activity, Settings
+  Droplets, Activity, Settings, Lock, Unlock
 } from "lucide-react";
 import TankViz from "@/components/DevicesSection/TankViz";
 
@@ -26,22 +26,20 @@ function saveHistoryFor(systemId, rows) {
     const map = JSON.parse(localStorage.getItem(HIST_KEY) ?? "{}");
     map[systemId] = rows.map((r) => ({
       ...r,
-      ts: r.ts instanceof Date ? r.ts.toISOString() : r.ts, // Date -> ISO
+      ts: r.ts instanceof Date ? r.ts.toISOString() : r.ts,
     }));
     localStorage.setItem(HIST_KEY, JSON.stringify(map));
   } catch {}
 }
 
-// Icono por módulo
 const iconFor = (key) => (key === "nivel" ? Droplets : key === "sensor" ? Activity : Settings);
 
 export default function SystemDetailsModal({ open, onClose, system }) {
   const [rows, setRows] = useState([]);
+  const [spinPulse, setSpinPulse] = useState(false); // para re-disparar wiggle
 
-  // Nivel actual (para el tanque animado)
   const currentLevel = Math.round(rows.at(-1)?.nivel ?? 60);
 
-  // ---- NUEVO: válvula abierta y tendencia del nivel (para animaciones) ----
   const last = rows.at(-1) || {};
   const prev = rows.at(-2) || null;
   const valveOpen = String(last.valvula || "").toLowerCase() === "abierta";
@@ -52,17 +50,16 @@ export default function SystemDetailsModal({ open, onClose, system }) {
       ? "down"
       : "steady"
     : "steady";
-  // ------------------------------------------------------------------------
 
-  // Semilla de registros de ejemplo (si no hay persistidos)
+  // Seed si no hay historial guardado
   const seedRows = useMemo(() => {
     const out = [];
     const now = Date.now();
     for (let i = 0; i < 30; i++) {
       out.push({
-        ts: new Date(now - i * 60 * 60 * 1000), // cada hora
+        ts: new Date(now - i * 60 * 60 * 1000),
         nivel: Math.max(0, Math.min(100, 50 + Math.round(Math.sin(i / 3) * 15) + (i % 7))),
-        sensor: Math.max(0, Math.round(35 + Math.cos(i / 2) * 3 + (i % 5) * 0.3)), // cm
+        sensor: Math.max(0, Math.round(35 + Math.cos(i / 2) * 3 + (i % 5) * 0.3)),
         valvula: i % 2 === 0 ? "Abierta" : "Cerrada",
         signal: Math.max(50, 90 - (i % 9) * 2),
         note: "—",
@@ -71,35 +68,103 @@ export default function SystemDetailsModal({ open, onClose, system }) {
     return out.reverse();
   }, []);
 
-  // Cargar historial (persistido o seed) cuando se abre
+  // Cargar historial al abrir
   useEffect(() => {
     if (!open || !system?.id) return;
     const persisted = loadHistoryFor(system.id);
     setRows(persisted.length ? persisted : seedRows);
   }, [open, system?.id, seedRows]);
 
-  // Guardar historial cuando cambie
+  // Guardar historial en cambios
   useEffect(() => {
     if (!open || !system?.id) return;
     saveHistoryFor(system.id, rows);
   }, [open, system?.id, rows]);
+
+  // === Llenado progresivo cuando la válvula está abierta ===
+  useEffect(() => {
+    if (!open) return;
+    const TICK = 2000; // cada 2s
+    const id = setInterval(() => {
+      setRows((prevRows) => {
+        const lastRow = prevRows.at(-1);
+        if (!lastRow) return prevRows;
+
+        const isOpen = String(lastRow.valvula || "").toLowerCase() === "abierta";
+        if (!isOpen) return prevRows;
+
+        // aumento suave 1.3% - 2.1%
+        const deltaPct = 1.3 + Math.random() * 0.8;
+        const newLevel = Math.min(100, (lastRow.nivel ?? 60) + deltaPct);
+
+        // sensor (cm) baja un poquito cuando sube el nivel
+        const newSensor = Math.max(0, (lastRow.sensor ?? 35) - deltaPct * 0.35);
+
+        const next = {
+          ...lastRow,
+          ts: new Date(),
+          nivel: newLevel,
+          sensor: Number(newSensor.toFixed(1)),
+          // mantenemos "Abierta"
+          valvula: "Abierta",
+          note: "Llenando…",
+        };
+
+        const out = [...prevRows, next];
+        if (out.length > MAX_ROWS) out.splice(0, out.length - MAX_ROWS);
+
+        // pulso para wiggle de la válvula
+        setSpinPulse((v) => !v);
+        return out;
+      });
+    }, TICK);
+
+    return () => clearInterval(id);
+  }, [open]);
 
   if (!open || !system) return null;
 
   const statusOk = (system.controller?.status || "offline") === "online";
   const statusChip = statusOk ? "bg-green-100 text-green-700" : "bg-rose-100 text-rose-700";
 
-  // Agregar un registro de ejemplo (útil mientras no llega telemetría real)
+  // Botón: alternar la válvula (y registrar el cambio)
+  const toggleValve = () => {
+    setRows((prev) => {
+      const base = prev.at(-1) || {
+        ts: new Date(),
+        nivel: 60,
+        sensor: 35,
+        valvula: "Cerrada",
+        signal: 80,
+        note: "—",
+      };
+      const opened = String(base.valvula || "").toLowerCase() === "abierta";
+      const next = {
+        ...base,
+        ts: new Date(),
+        valvula: opened ? "Cerrada" : "Abierta",
+        note: opened ? "Cierre manual" : "Apertura manual",
+      };
+      const out = [...prev, next];
+      if (out.length > MAX_ROWS) out.splice(0, out.length - MAX_ROWS);
+      // pequeño pulso de animación al accionar
+      setSpinPulse((v) => !v);
+      return out;
+    });
+  };
+
+  // Registro de ejemplo (no toca la válvula)
   const addFakeRow = () => {
     setRows((prev) => {
+      const last = prev.at(-1);
       const next = [
         ...prev,
         {
           ts: new Date(),
-          nivel: Math.max(0, Math.min(100, (prev.at(-1)?.nivel ?? 60) + (Math.random() * 6 - 3))),
-          sensor: Math.max(0, (prev.at(-1)?.sensor ?? 35) + (Math.random() * 1.5 - 0.7)),
-          valvula: Math.random() > 0.5 ? "Abierta" : "Cerrada",
-          signal: Math.max(40, Math.min(100, (prev.at(-1)?.signal ?? 80) + (Math.random() * 10 - 5))),
+          nivel: Math.max(0, Math.min(100, (last?.nivel ?? 60) + (Math.random() * 6 - 3))),
+          sensor: Math.max(0, (last?.sensor ?? 35) + (Math.random() * 1.5 - 0.7)),
+          valvula: last?.valvula ?? "Cerrada",
+          signal: Math.max(40, Math.min(100, (last?.signal ?? 80) + (Math.random() * 10 - 5))),
           note: "—",
         },
       ];
@@ -134,12 +199,9 @@ export default function SystemDetailsModal({ open, onClose, system }) {
   return (
     <div
       className="fixed inset-0 z-[60] grid place-items-center bg-black/40 p-4"
-      onMouseDown={(e) => {
-        if (e.target === e.currentTarget) onClose?.();
-      }}
+      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose?.(); }}
     >
       <div className="w-full max-w-6xl overflow-hidden rounded-2xl bg-white shadow-xl">
-        {/* Layout: header / body (scroll) / footer */}
         <div className="grid max-h-[85vh] grid-rows-[auto_1fr_auto]">
           {/* Header */}
           <div className="flex items-center justify-between border-b p-4">
@@ -153,25 +215,20 @@ export default function SystemDetailsModal({ open, onClose, system }) {
               <span className={`rounded-full px-2 py-0.5 text-xs ${statusChip}`}>
                 {statusOk ? "En línea" : "Fuera de línea"}
               </span>
-              <button
-                aria-label="Cerrar"
-                onClick={onClose}
-                className="rounded-md p-2 text-gray-600 hover:bg-gray-100"
-              >
+              <button aria-label="Cerrar" onClick={onClose} className="rounded-md p-2 text-gray-600 hover:bg-gray-100">
                 <X className="h-5 w-5" />
               </button>
             </div>
           </div>
 
-          {/* Body (scrollable) */}
+          {/* Body */}
           <div className="overflow-y-auto p-4">
-            {/* Arriba: tanque + panel derecho */}
             <div className="mb-4 grid gap-4 md:grid-cols-2">
               <TankViz
                 level={currentLevel}
                 capacityLiters={500}
-                valveOpen={valveOpen}   
-                trend={trend}           
+                valveOpen={valveOpen}
+                valveSpin={spinPulse}
               />
 
               <div className="grid gap-4">
@@ -228,7 +285,20 @@ export default function SystemDetailsModal({ open, onClose, system }) {
             <div className="rounded-xl border">
               <div className="flex items-center justify-between gap-3 border-b p-3">
                 <h4 className="text-sm font-semibold text-gray-700">Historial de telemetría</h4>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  {/* Botón Abrir/Cerrar válvula */}
+                  <button
+                    onClick={toggleValve}
+                    className={`inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs
+                      ${valveOpen
+                        ? "border-emerald-200 text-emerald-700 hover:bg-emerald-50"
+                        : "border-rose-200 text-rose-700 hover:bg-rose-50"}`}
+                    title={valveOpen ? "Cerrar válvula" : "Abrir válvula"}
+                  >
+                    {valveOpen ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
+                    {valveOpen ? "Cerrar válvula" : "Abrir válvula"}
+                  </button>
+
                   <button
                     onClick={addFakeRow}
                     className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
