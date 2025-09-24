@@ -1,13 +1,15 @@
 // src/components/DevicesSection/SystemDetailsModal.jsx
 import React, { useEffect, useMemo, useState } from "react";
 import {
-  X, MapPin, Wifi, Clock, Download, PlusCircle,
-  Droplets, Activity, Settings, Lock, Unlock
+  X, MapPin, Wifi, Clock, PlusCircle,
+  Droplets, Activity, Settings, Calendar, ChevronLeft, ChevronRight,
+  Lock, Unlock // ⬅️ NEW
 } from "lucide-react";
 import TankViz from "@/components/DevicesSection/TankViz";
 
 const HIST_KEY = "gd_history";
 const MAX_ROWS = 500;
+const PAGE_SIZE = 10; // tamaño de página
 
 /** Carga historial para un sistema */
 function loadHistoryFor(systemId) {
@@ -26,20 +28,39 @@ function saveHistoryFor(systemId, rows) {
     const map = JSON.parse(localStorage.getItem(HIST_KEY) ?? "{}");
     map[systemId] = rows.map((r) => ({
       ...r,
-      ts: r.ts instanceof Date ? r.ts.toISOString() : r.ts,
+      ts: r.ts instanceof Date ? r.ts.toISOString() : r.ts, // Date -> ISO
     }));
     localStorage.setItem(HIST_KEY, JSON.stringify(map));
   } catch {}
 }
 
+// Icono por módulo
 const iconFor = (key) => (key === "nivel" ? Droplets : key === "sensor" ? Activity : Settings);
+
+// helpers de fecha/paginación
+const pad2 = (n) => String(n).padStart(2, "0");
+const dateKey = (d) => `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`; // yyyy-mm-dd
+
+function getPageNumbers(total, current) {
+  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1);
+  const pages = [1];
+  if (current > 3) pages.push("…");
+  const middle = [current - 1, current, current + 1].filter(
+    (p) => p > 1 && p < total
+  );
+  pages.push(...middle);
+  if (current < total - 2) pages.push("…");
+  pages.push(total);
+  return pages;
+}
 
 export default function SystemDetailsModal({ open, onClose, system }) {
   const [rows, setRows] = useState([]);
-  const [spinPulse, setSpinPulse] = useState(false); // para re-disparar wiggle
 
+  // Nivel actual (para el tanque animado)
   const currentLevel = Math.round(rows.at(-1)?.nivel ?? 60);
 
+  // Tendencia y estado de válvula
   const last = rows.at(-1) || {};
   const prev = rows.at(-2) || null;
   const valveOpen = String(last.valvula || "").toLowerCase() === "abierta";
@@ -51,15 +72,15 @@ export default function SystemDetailsModal({ open, onClose, system }) {
       : "steady"
     : "steady";
 
-  // Seed si no hay historial guardado
+  // Semilla
   const seedRows = useMemo(() => {
     const out = [];
     const now = Date.now();
     for (let i = 0; i < 30; i++) {
       out.push({
-        ts: new Date(now - i * 60 * 60 * 1000),
+        ts: new Date(now - i * 60 * 60 * 1000), // cada hora
         nivel: Math.max(0, Math.min(100, 50 + Math.round(Math.sin(i / 3) * 15) + (i % 7))),
-        sensor: Math.max(0, Math.round(35 + Math.cos(i / 2) * 3 + (i % 5) * 0.3)),
+        sensor: Math.max(0, Math.round(35 + Math.cos(i / 2) * 3 + (i % 5) * 0.3)), // cm
         valvula: i % 2 === 0 ? "Abierta" : "Cerrada",
         signal: Math.max(50, 90 - (i % 9) * 2),
         note: "—",
@@ -68,103 +89,58 @@ export default function SystemDetailsModal({ open, onClose, system }) {
     return out.reverse();
   }, []);
 
-  // Cargar historial al abrir
+  // fecha seleccionada y página
+  const [selectedDate, setSelectedDate] = useState(null);
+  const [page, setPage] = useState(1);
+
+  // Cargar historial
   useEffect(() => {
     if (!open || !system?.id) return;
     const persisted = loadHistoryFor(system.id);
-    setRows(persisted.length ? persisted : seedRows);
+    const initial = persisted.length ? persisted : seedRows;
+    setRows(initial);
+    const lastDate = initial.at(-1)?.ts || new Date();
+    setSelectedDate(new Date(lastDate));
+    setPage(1);
   }, [open, system?.id, seedRows]);
 
-  // Guardar historial en cambios
+  // Guardar
   useEffect(() => {
     if (!open || !system?.id) return;
     saveHistoryFor(system.id, rows);
   }, [open, system?.id, rows]);
 
-  // === Llenado progresivo cuando la válvula está abierta ===
-  useEffect(() => {
-    if (!open) return;
-    const TICK = 2000; // cada 2s
-    const id = setInterval(() => {
-      setRows((prevRows) => {
-        const lastRow = prevRows.at(-1);
-        if (!lastRow) return prevRows;
+  // Filtro por día
+  const filteredRows = useMemo(() => {
+    if (!selectedDate) return rows;
+    const key = dateKey(selectedDate);
+    return rows.filter((r) => dateKey(r.ts) === key);
+  }, [rows, selectedDate]);
 
-        const isOpen = String(lastRow.valvula || "").toLowerCase() === "abierta";
-        if (!isOpen) return prevRows;
-
-        // aumento suave 1.3% - 2.1%
-        const deltaPct = 1.3 + Math.random() * 0.8;
-        const newLevel = Math.min(100, (lastRow.nivel ?? 60) + deltaPct);
-
-        // sensor (cm) baja un poquito cuando sube el nivel
-        const newSensor = Math.max(0, (lastRow.sensor ?? 35) - deltaPct * 0.35);
-
-        const next = {
-          ...lastRow,
-          ts: new Date(),
-          nivel: newLevel,
-          sensor: Number(newSensor.toFixed(1)),
-          // mantenemos "Abierta"
-          valvula: "Abierta",
-          note: "Llenando…",
-        };
-
-        const out = [...prevRows, next];
-        if (out.length > MAX_ROWS) out.splice(0, out.length - MAX_ROWS);
-
-        // pulso para wiggle de la válvula
-        setSpinPulse((v) => !v);
-        return out;
-      });
-    }, TICK);
-
-    return () => clearInterval(id);
-  }, [open]);
+  // Paginación
+  const totalPages = Math.max(1, Math.ceil(filteredRows.length / PAGE_SIZE));
+  useEffect(() => setPage(1), [selectedDate, rows]);
+  const pageRows = useMemo(() => {
+    const start = (page - 1) * PAGE_SIZE;
+    return filteredRows.slice(start, start + PAGE_SIZE);
+  }, [filteredRows, page]);
 
   if (!open || !system) return null;
 
   const statusOk = (system.controller?.status || "offline") === "online";
   const statusChip = statusOk ? "bg-green-100 text-green-700" : "bg-rose-100 text-rose-700";
 
-  // Botón: alternar la válvula (y registrar el cambio)
-  const toggleValve = () => {
-    setRows((prev) => {
-      const base = prev.at(-1) || {
-        ts: new Date(),
-        nivel: 60,
-        sensor: 35,
-        valvula: "Cerrada",
-        signal: 80,
-        note: "—",
-      };
-      const opened = String(base.valvula || "").toLowerCase() === "abierta";
-      const next = {
-        ...base,
-        ts: new Date(),
-        valvula: opened ? "Cerrada" : "Abierta",
-        note: opened ? "Cierre manual" : "Apertura manual",
-      };
-      const out = [...prev, next];
-      if (out.length > MAX_ROWS) out.splice(0, out.length - MAX_ROWS);
-      // pequeño pulso de animación al accionar
-      setSpinPulse((v) => !v);
-      return out;
-    });
-  };
-
-  // Registro de ejemplo (no toca la válvula)
+  // Simular registro (igual que antes)
   const addFakeRow = () => {
     setRows((prev) => {
-      const last = prev.at(-1);
       const next = [
         ...prev,
         {
           ts: new Date(),
-          nivel: Math.max(0, Math.min(100, (last?.nivel ?? 60) + (Math.random() * 6 - 3))),
-          sensor: Math.max(0, (last?.sensor ?? 35) + (Math.random() * 1.5 - 0.7)),
-          valvula: last?.valvula ?? "Cerrada",
-          signal: Math.max(40, Math.min(100, (last?.signal ?? 80) + (Math.random() * 10 - 5))),
+          nivel: Math.max(0, Math.min(100, (prev.at(-1)?.nivel ?? 60) + (Math.random() * 6 - 3))),
+          sensor: Math.max(0, (prev.at(-1)?.sensor ?? 35) + (Math.random() * 1.5 - 0.7)),
+          valvula: Math.random() > 0.5 ? "Abierta" : "Cerrada",
+          signal: Math.max(40, Math.min(100, (prev.at(-1)?.signal ?? 80) + (Math.random() * 10 - 5))),
           note: "—",
         },
       ];
@@ -173,33 +149,46 @@ export default function SystemDetailsModal({ open, onClose, system }) {
     });
   };
 
-  const exportCSV = () => {
-    const header = "Fecha/Hora,Nivel (%),Sensor (cm),Válvula,Señal (%),Nota\n";
-    const lines = rows
-      .map((r) =>
-        [
-          r.ts.toLocaleString(),
-          String(Math.round(r.nivel)),
-          String(Number(r.sensor ?? 0).toFixed(1)),
-          r.valvula,
-          String(Math.round(r.signal)),
-          r.note,
-        ].join(",")
-      )
-      .join("\n");
-    const blob = new Blob([header + lines], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `historial_${system.id}.csv`;
-    a.click();
-    URL.revokeObjectURL(url);
+  // ⬅️ NEW: Abrir/Cerrar válvula con efecto sobre el nivel
+  const toggleValve = () => {
+    setRows((prev) => {
+      const last = prev.at(-1) || {};
+      const wasOpen = String(last.valvula || "").toLowerCase() === "abierta";
+      const willOpen = !wasOpen;
+
+      const prevLevel = Number(last.nivel ?? 60);
+      // si abrimos: sube 2–4%; si cerramos: variación mínima -0.5..+0.5%
+      const delta = willOpen ? (1.5 + Math.random() * 2.5) : (Math.random() * 1 - 0.5);
+      const nextLevel = Math.max(0, Math.min(100, prevLevel + delta));
+
+      const next = [
+        ...prev,
+        {
+          ts: new Date(),
+          nivel: nextLevel,
+          sensor: Math.max(0, (last.sensor ?? 35) + (Math.random() * 1.2 - 0.6)),
+          valvula: willOpen ? "Abierta" : "Cerrada",
+          signal: Math.max(40, Math.min(100, (last.signal ?? 80) + (Math.random() * 6 - 3))),
+          note: "—",
+        },
+      ];
+      if (next.length > MAX_ROWS) next.splice(0, next.length - MAX_ROWS);
+
+      // Mostrar el nuevo registro (hoy) y resetear a página 1
+      const now = new Date();
+      setSelectedDate((d) => (!d || dateKey(d) !== dateKey(now) ? now : d));
+      setPage(1);
+
+      return next;
+    });
   };
 
   return (
     <div
       className="fixed inset-0 z-[60] grid place-items-center bg-black/40 p-4"
-      onMouseDown={(e) => { if (e.target === e.currentTarget) onClose?.(); }}
+      onMouseDown={(e) => {
+        if (e.target === e.currentTarget) onClose?.();
+      }}
     >
       <div className="w-full max-w-6xl overflow-hidden rounded-2xl bg-white shadow-xl">
         <div className="grid max-h-[85vh] grid-rows-[auto_1fr_auto]">
@@ -215,7 +204,11 @@ export default function SystemDetailsModal({ open, onClose, system }) {
               <span className={`rounded-full px-2 py-0.5 text-xs ${statusChip}`}>
                 {statusOk ? "En línea" : "Fuera de línea"}
               </span>
-              <button aria-label="Cerrar" onClick={onClose} className="rounded-md p-2 text-gray-600 hover:bg-gray-100">
+              <button
+                aria-label="Cerrar"
+                onClick={onClose}
+                className="rounded-md p-2 text-gray-600 hover:bg-gray-100"
+              >
                 <X className="h-5 w-5" />
               </button>
             </div>
@@ -223,12 +216,13 @@ export default function SystemDetailsModal({ open, onClose, system }) {
 
           {/* Body */}
           <div className="overflow-y-auto p-4">
+            {/* Tanque + resumen */}
             <div className="mb-4 grid gap-4 md:grid-cols-2">
               <TankViz
                 level={currentLevel}
                 capacityLiters={500}
                 valveOpen={valveOpen}
-                valveSpin={spinPulse}
+                trend={trend}
               />
 
               <div className="grid gap-4">
@@ -283,22 +277,24 @@ export default function SystemDetailsModal({ open, onClose, system }) {
 
             {/* Historial + acciones */}
             <div className="rounded-xl border">
-              <div className="flex items-center justify-between gap-3 border-b p-3">
+              <div className="flex flex-wrap items-center justify-between gap-3 border-b p-3">
                 <h4 className="text-sm font-semibold text-gray-700">Historial de telemetría</h4>
+
                 <div className="flex flex-wrap items-center gap-2">
-                  {/* Botón Abrir/Cerrar válvula */}
+                  {/* ⬅️ NEW: Abrir/Cerrar válvula */}
                   <button
                     onClick={toggleValve}
-                    className={`inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs
+                    className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs
                       ${valveOpen
-                        ? "border-emerald-200 text-emerald-700 hover:bg-emerald-50"
-                        : "border-rose-200 text-rose-700 hover:bg-rose-50"}`}
+                        ? "border border-rose-200 text-rose-700 hover:bg-rose-50"
+                        : "border border-emerald-200 text-emerald-700 hover:bg-emerald-50"}`}
                     title={valveOpen ? "Cerrar válvula" : "Abrir válvula"}
                   >
                     {valveOpen ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
                     {valveOpen ? "Cerrar válvula" : "Abrir válvula"}
                   </button>
 
+                  {/* Simular registro */}
                   <button
                     onClick={addFakeRow}
                     className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
@@ -307,42 +303,90 @@ export default function SystemDetailsModal({ open, onClose, system }) {
                     <PlusCircle className="h-4 w-4" />
                     Simular registro
                   </button>
-                  <button
-                    onClick={exportCSV}
-                    className="inline-flex items-center gap-2 rounded-md border px-3 py-1.5 text-xs text-gray-700 hover:bg-gray-50"
-                    title="Exportar CSV"
-                  >
-                    <Download className="h-4 w-4" />
-                    Exportar CSV
-                  </button>
+
+                  {/* Selector de fecha */}
+                  <div className="relative inline-flex items-center rounded-md border px-2 py-1.5 text-xs text-gray-700">
+                    <Calendar className="mr-2 h-4 w-4 text-gray-400" />
+                    <input
+                      type="date"
+                      className="bg-transparent outline-none"
+                      value={selectedDate ? dateKey(selectedDate) : ""}
+                      onChange={(e) => {
+                        if (!e.target.value) return;
+                        setSelectedDate(new Date(e.target.value));
+                      }}
+                    />
+                  </div>
+
+                  {/* Paginación */}
+                  <nav className="inline-flex items-center gap-1">
+                    <button
+                      className="rounded-md border px-2 py-1.5 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+                      onClick={() => setPage((p) => Math.max(1, p - 1))}
+                      disabled={page <= 1}
+                    >
+                      <ChevronLeft className="h-4 w-4" />
+                    </button>
+
+                    {getPageNumbers(totalPages, page).map((p, idx) =>
+                      p === "…" ? (
+                        <span key={`dots-${idx}`} className="px-2 text-xs text-gray-400">…</span>
+                      ) : (
+                        <button
+                          key={`p-${p}`}
+                          onClick={() => setPage(p)}
+                          className={`rounded-md border px-2 py-1.5 text-xs ${
+                            p === page ? "bg-gray-900 text-white" : "text-gray-700 hover:bg-gray-50"
+                          }`}
+                        >
+                          {p}
+                        </button>
+                      )
+                    )}
+
+                    <button
+                      className="rounded-md border px-2 py-1.5 text-xs text-gray-700 hover:bg-gray-50 disabled:opacity-40"
+                      onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+                      disabled={page >= totalPages}
+                    >
+                      <ChevronRight className="h-4 w-4" />
+                    </button>
+                  </nav>
                 </div>
               </div>
 
+              {/* Tabla paginada */}
               <div className="max-h-[50vh] overflow-auto">
-                <table className="min-w-full text-sm">
-                  <thead className="sticky top-0 bg-gray-50 text-gray-600">
-                    <tr>
-                      <th className="px-4 py-2 text-left">Fecha / hora</th>
-                      <th className="px-4 py-2 text-right">Nivel (%)</th>
-                      <th className="px-4 py-2 text-right">Sensor (cm)</th>
-                      <th className="px-4 py-2 text-left">Válvula</th>
-                      <th className="px-4 py-2 text-right">Señal (%)</th>
-                      <th className="px-4 py-2 text-left">Nota</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {rows.map((r, i) => (
-                      <tr key={r.ts instanceof Date ? r.ts.getTime() : i} className="border-t">
-                        <td className="px-4 py-2">{r.ts.toLocaleString()}</td>
-                        <td className="px-4 py-2 text-right">{Math.round(r.nivel)}</td>
-                        <td className="px-4 py-2 text-right">{Number(r.sensor ?? 0).toFixed(1)}</td>
-                        <td className="px-4 py-2">{r.valvula}</td>
-                        <td className="px-4 py-2 text-right">{Math.round(r.signal)}</td>
-                        <td className="px-4 py-2">{r.note}</td>
+                {pageRows.length === 0 ? (
+                  <div className="p-6 text-center text-sm text-gray-500">
+                    Sin registros para la fecha seleccionada.
+                  </div>
+                ) : (
+                  <table className="min-w-full text-sm">
+                    <thead className="sticky top-0 bg-gray-50 text-gray-600">
+                      <tr>
+                        <th className="px-4 py-2 text-left">Fecha / hora</th>
+                        <th className="px-4 py-2 text-right">Nivel (%)</th>
+                        <th className="px-4 py-2 text-right">Sensor (cm)</th>
+                        <th className="px-4 py-2 text-left">Válvula</th>
+                        <th className="px-4 py-2 text-right">Señal (%)</th>
+                        <th className="px-4 py-2 text-left">Nota</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {pageRows.map((r, i) => (
+                        <tr key={r.ts instanceof Date ? r.ts.getTime() : i} className="border-t">
+                          <td className="px-4 py-2">{r.ts.toLocaleString()}</td>
+                          <td className="px-4 py-2 text-right">{Math.round(r.nivel)}</td>
+                          <td className="px-4 py-2 text-right">{Number(r.sensor ?? 0).toFixed(1)}</td>
+                          <td className="px-4 py-2">{r.valvula}</td>
+                          <td className="px-4 py-2 text-right">{Math.round(r.signal)}</td>
+                          <td className="px-4 py-2">{r.note}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
               </div>
             </div>
           </div>
