@@ -8,14 +8,169 @@ export default function FirmwareModal({ open, onClose, device }) {
     log, isBusy, connect, disconnect, sendLine, enterBootloader, write
   } = useWebSerial();
 
-  // ⬇️ AQUÍ PEGA MÁS ADELANTE TU CÓDIGO/PLANTILLA POR DEFECTO
+  // ⬇️ Código ESP32 para sistema de tanque de agua
   const defaultSketch = useMemo(() => `
-// --- Código de ejemplo (placeholder) ---
-// Aquí irá TU código cuando lo tengas listo.
-// Mientras tanto, puedes escribir comandos y enviarlos via serie.
-//
-// Ejemplo para MicroPython (si el ESP32 tiene MicroPython):
-// print("Hola desde WebSerial!")
+// Sistema de monitoreo de tanque de agua con ESP32
+// Componentes: HC-SR04 (ultrasonido), Válvula solenoide, WiFi
+
+#include <WiFi.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
+
+// Configuración WiFi
+const char* ssid = "TU_WIFI_SSID";
+const char* password = "TU_WIFI_PASSWORD";
+const char* serverURL = "https://iot-api-gyes.onrender.com/api/devices/data";
+
+// Pines del ESP32
+#define TRIG_PIN 4    // Pin trigger del HC-SR04
+#define ECHO_PIN 5    // Pin echo del HC-SR04
+#define VALVE_PIN 2   // Pin de control de válvula solenoide
+#define LED_PIN 13    // LED indicador
+
+// Variables del sistema
+float waterLevel = 0;
+float distance = 0;
+bool valveOpen = false;
+unsigned long lastReading = 0;
+const unsigned long READING_INTERVAL = 5000; // 5 segundos
+
+void setup() {
+  Serial.begin(115200);
+  
+  // Configurar pines
+  pinMode(TRIG_PIN, OUTPUT);
+  pinMode(ECHO_PIN, INPUT);
+  pinMode(VALVE_PIN, OUTPUT);
+  pinMode(LED_PIN, OUTPUT);
+  
+  digitalWrite(VALVE_PIN, LOW); // Válvula cerrada por defecto
+  digitalWrite(LED_PIN, LOW);
+  
+  Serial.println("=== Sistema de Tanque de Agua ===");
+  
+  // Conectar a WiFi
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.print(".");
+  }
+  Serial.println();
+  Serial.println("WiFi conectado!");
+  Serial.print("IP: ");
+  Serial.println(WiFi.localIP());
+  
+  // Calibración inicial
+  Serial.println("Calibrando sensor...");
+  delay(2000);
+}
+
+void loop() {
+  // Medir nivel de agua cada 5 segundos
+  if (millis() - lastReading >= READING_INTERVAL) {
+    measureWaterLevel();
+    sendDataToServer();
+    lastReading = millis();
+  }
+  
+  // Procesar comandos del puerto serie
+  handleSerialCommands();
+  
+  delay(100);
+}
+
+void measureWaterLevel() {
+  // Medición con sensor ultrasónico HC-SR04
+  digitalWrite(TRIG_PIN, LOW);
+  delayMicroseconds(2);
+  digitalWrite(TRIG_PIN, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(TRIG_PIN, LOW);
+  
+  long duration = pulseIn(ECHO_PIN, HIGH);
+  distance = duration * 0.034 / 2; // Convertir a cm
+  
+  // Tanque de 500L, altura ~50cm
+  // Distancia del sensor al fondo: ~50cm
+  // Nivel = 100 - (distancia_medida / distancia_maxima * 100)
+  float tankHeight = 50.0; // cm
+  waterLevel = max(0, min(100, 100 - (distance / tankHeight * 100)));
+  
+  Serial.printf("Distancia: %.1f cm, Nivel: %.1f%%\\n", distance, waterLevel);
+  
+  // Control automático de válvula
+  if (waterLevel < 20 && !valveOpen) {
+    openValve();
+  } else if (waterLevel > 80 && valveOpen) {
+    closeValve();
+  }
+}
+
+void openValve() {
+  digitalWrite(VALVE_PIN, HIGH);
+  valveOpen = true;
+  digitalWrite(LED_PIN, HIGH);
+  Serial.println("Válvula ABIERTA");
+}
+
+void closeValve() {
+  digitalWrite(VALVE_PIN, LOW);
+  valveOpen = false;
+  digitalWrite(LED_PIN, LOW);
+  Serial.println("Válvula CERRADA");
+}
+
+void sendDataToServer() {
+  if (WiFi.status() != WL_CONNECTED) return;
+  
+  HTTPClient http;
+  http.begin(serverURL);
+  http.addHeader("Content-Type", "application/json");
+  
+  // Crear JSON con los datos
+  DynamicJsonDocument doc(1024);
+  doc["device_id"] = "tank_system_001";
+  doc["timestamp"] = millis();
+  doc["water_level"] = waterLevel;
+  doc["distance"] = distance;
+  doc["valve_open"] = valveOpen;
+  doc["wifi_signal"] = WiFi.RSSI();
+  doc["uptime"] = millis() / 1000;
+  
+  String jsonString;
+  serializeJson(doc, jsonString);
+  
+  int httpResponseCode = http.POST(jsonString);
+  
+  if (httpResponseCode > 0) {
+    String response = http.getString();
+    Serial.printf("Datos enviados: %d\\n", httpResponseCode);
+  } else {
+    Serial.printf("Error enviando datos: %d\\n", httpResponseCode);
+  }
+  
+  http.end();
+}
+
+void handleSerialCommands() {
+  if (Serial.available()) {
+    String command = Serial.readStringUntil('\\n');
+    command.trim();
+    
+    if (command == "OPEN") {
+      openValve();
+    } else if (command == "CLOSE") {
+      closeValve();
+    } else if (command == "STATUS") {
+      Serial.printf("Nivel: %.1f%%, Válvula: %s, WiFi: %d dBm\\n", 
+                   waterLevel, valveOpen ? "ABIERTA" : "CERRADA", WiFi.RSSI());
+    } else if (command == "RESET") {
+      ESP.restart();
+    } else {
+      Serial.println("Comandos: OPEN, CLOSE, STATUS, RESET");
+    }
+  }
+}
   `.trim(), []);
 
   const [code, setCode] = useState(defaultSketch);

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Waves, Droplets, Activity, Settings, Monitor } from 'lucide-react';
-import { Alert, AlertDescription } from "../Alert/alert";
+import { Alert, AlertDescription } from "../../common/Alert/alert";
 
 
 const OverviewSection = () => {

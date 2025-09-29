@@ -5,7 +5,7 @@ import {
   Droplets, Activity, Settings, Calendar, ChevronLeft, ChevronRight,
   Lock, Unlock // ⬅️ NEW
 } from "lucide-react";
-import TankViz from "@/components/DevicesSection/TankViz";
+import TankViz from "@/components/features/devices/TankViz";
 
 const HIST_KEY = "gd_history";
 const MAX_ROWS = 500;

@@ -5,23 +5,25 @@ import { Toaster } from "sonner";
 import { AuthProvider } from "@/context/AuthContext";
 
 import ProtectedRoute from "@/routes/ProtectedRoute";
-import MainLayout from "@/components/MainLayout/Layout";
+import MainLayout from "@/components/layout/Layout";
 
 import LoginPage from "@/pages/Auth/LoginPage";
 import RegisterPage from "@/pages/Auth/RegisterPage";
 
-import PublicLayout from "@/components/PublicLayout/PublicLayout";
+import PublicLayout from "@/components/layout/PublicLayout";
 import DocsPublic from "@/pages/Public/DocsPublic";
 
-import OverviewSection from "@/components/Overview/OverviewSection";
-import ComponentsSection from "@/components/ComponentsSection/ComponentsSection";
-import TankSection from "@/components/TankSection/TankSection";
-import SensorSection from "@/components/SensorSection/SensorSection";
-import ValveSection from "@/components/ValveSection/ValveSection";
-import MathematicsSection from "@/components/MathematicsSection/MathematicsSection";
-import ApplicationsSection from "@/components/ApplicationsSection/ApplicationsSection";
-import DevicesSection from "@/components/DevicesSection/DevicesSection";
-import UsersPage from "@/pages/Admin/UsersPage";
+import OverviewSection from "@/components/features/dashboard/OverviewSection";
+import ComponentsSection from "@/components/features/dashboard/ComponentsSection";
+import TankSection from "@/components/features/dashboard/TankSection";
+import SensorSection from "@/components/features/dashboard/SensorSection";
+import ValveSection from "@/components/features/dashboard/ValveSection";
+import MathematicsSection from "@/components/features/dashboard/MathematicsSection";
+import ApplicationsSection from "@/components/features/dashboard/ApplicationsSection";
+import DevicesSection from "@/components/features/devices/DevicesSection";
+import UsersPage from "@/components/features/admin/UsersPage";
+import ApiDiagnostic from "@/components/features/admin/ApiDiagnostic";
+import ProfilePage from "@/pages/Profile/ProfilePage";
 
 function NotFound() {
   return (
@@ -57,10 +59,12 @@ export default function App() {
               <Route path="mathematics" element={<MathematicsSection />} />
               <Route path="applications" element={<ApplicationsSection />} />
               <Route path="devices" element={<DevicesSection />} />
+              <Route path="profile" element={<ProfilePage />} />
 
               {/* Solo admin */}
               <Route element={<ProtectedRoute requireAdmin />}>
                 <Route path="admin/users" element={<UsersPage />} />
+                <Route path="admin/diagnostic" element={<ApiDiagnostic />} />
               </Route>
 
               <Route path="*" element={<NotFound />} />

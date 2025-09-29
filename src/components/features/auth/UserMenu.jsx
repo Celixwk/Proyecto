@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
-import { ChevronDown, LogOut, User as UserIcon, FileText, Users } from "lucide-react";
+import { ChevronDown, LogOut, User as UserIcon, FileText, Users, Wifi } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 
 export default function UserMenu() {
@@ -84,23 +84,33 @@ export default function UserMenu() {
           </Link>
 
           <Link
-            to="/app/overview"
+            to="/app/profile"
             onClick={() => setOpen(false)}
             className="flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-gray-50"
           >
             <UserIcon className="h-4 w-4" />
-            Mi cuenta
+            Mi perfil
           </Link>
 
           {isAdmin && (
-            <Link
-              to="/app/admin/users"
-              onClick={() => setOpen(false)}
-              className="flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-gray-50"
-            >
-              <Users className="h-4 w-4" />
-              Admin (usuarios)
-            </Link>
+            <>
+              <Link
+                to="/app/admin/users"
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-gray-50"
+              >
+                <Users className="h-4 w-4" />
+                Admin (usuarios)
+              </Link>
+              <Link
+                to="/app/admin/diagnostic"
+                onClick={() => setOpen(false)}
+                className="flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-gray-50"
+              >
+                <Wifi className="h-4 w-4" />
+                Diagnóstico API
+              </Link>
+            </>
           )}
 
           <button

@@ -1,6 +1,6 @@
 import React from 'react';
 import { Target, Monitor, BookOpen, Zap, Gauge } from 'lucide-react';
-import { Alert, AlertDescription } from "../Alert/alert";
+import { Alert, AlertDescription } from "../../common/Alert/alert";
 
 
 const ApplicationsSection = () => {

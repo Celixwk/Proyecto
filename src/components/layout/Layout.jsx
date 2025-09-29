@@ -1,8 +1,8 @@
 import React, { useState } from "react";
 import { Outlet } from "react-router-dom";
 import { Menu } from "lucide-react";
-import Sidebar from "@/components/Sidebar/Sidebar";
-import UserMenu from "@/components/Auth/UserMenu";
+import Sidebar from "@/components/common/Sidebar/Sidebar";
+import UserMenu from "@/components/features/auth/UserMenu";
 
 export default function MainLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);

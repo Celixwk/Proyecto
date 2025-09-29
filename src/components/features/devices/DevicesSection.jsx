@@ -3,8 +3,8 @@ import {
   Radar, RefreshCw, Plus, MapPin, Wifi, Power, Clock,
   Droplets, Activity, Settings, Wrench
 } from "lucide-react";
-import FirmwareModal from "@/components/DevicesSection/FirmwareModal";
-import SystemDetailsModal from "@/components/DevicesSection/SystemDetailsModal";
+import FirmwareModal from "@/components/features/devices/FirmwareModal";
+import SystemDetailsModal from "@/components/features/devices/SystemDetailsModal";
 const LS_KEY = "gd_systems";
 
 const loadSystems = () => {

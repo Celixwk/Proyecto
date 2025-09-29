@@ -1,11 +1,11 @@
 import React from 'react';
-import OverviewSection from "../Overview/OverviewSection";
-import ComponentsSection from "../ComponentsSection/ComponentsSection";
-import TankSection from "../TankSection/TankSection";
-import SensorSection from "../SensorSection/SensorSection";
-import ValveSection from "../ValveSection/ValveSection";
-import MathematicsSection from "../MathematicsSection/MathematicsSection";
-import ApplicationsSection from "../ApplicationsSection/ApplicationsSection";
+import OverviewSection from "../features/dashboard/OverviewSection";
+import ComponentsSection from "../features/dashboard/ComponentsSection";
+import TankSection from "../features/dashboard/TankSection";
+import SensorSection from "../features/dashboard/SensorSection";
+import ValveSection from "../features/dashboard/ValveSection";
+import MathematicsSection from "../features/dashboard/MathematicsSection";
+import ApplicationsSection from "../features/dashboard/ApplicationsSection";
 
 const ContentRenderer = ({ activeSection }) => {
   const renderContent = () => {
@@ -24,8 +24,6 @@ const ContentRenderer = ({ activeSection }) => {
         return <MathematicsSection />;
       case 'applications':
         return <ApplicationsSection />;
-      case 'conclusions':
-        return <ConclusionsSection />;
       default:
         return (
           <div className="flex items-center justify-center h-64">
