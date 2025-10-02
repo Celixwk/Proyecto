@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
+import axios from "axios";
 
 export default function LoginPage() {
   const { login, resetDemo } = useAuth();
@@ -23,6 +24,7 @@ export default function LoginPage() {
     setError("");
     setSubmitting(true);
     try {
+      const response = await axios.post("/api/user/login", form);
       await login(form.email.trim(), form.password);
       navigate(from, { replace: true });
     } catch (err) {
