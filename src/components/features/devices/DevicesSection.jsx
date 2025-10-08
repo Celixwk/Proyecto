@@ -5,6 +5,7 @@ import {
 } from "lucide-react";
 import FirmwareModal from "@/components/features/devices/FirmwareModal";
 import SystemDetailsModal from "@/components/features/devices/SystemDetailsModal";
+import AddDeviceModal from "@/components/features/devices/AddDeviceModal";
 const LS_KEY = "gd_systems";
 
 const loadSystems = () => {
@@ -194,6 +195,7 @@ export default function DevicesSection() {
   const [openFw, setOpenFw] = useState(false);
   const [currentSystem, setCurrentSystem] = useState(null);
   const [openDetails, setOpenDetails] = useState(false);
+  const [openAddDevice, setOpenAddDevice] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
@@ -247,6 +249,66 @@ export default function DevicesSection() {
     setSystems(next);
   };
 
+  // Función para manejar el guardado de nuevos dispositivos
+  const handleSaveDevice = (deviceData) => {
+    const newSystem = {
+      id: `sys-${Date.now()}`,
+      name: deviceData.name,
+      type: deviceData.type,
+      capacity: deviceData.capacity,
+      unit: deviceData.unit,
+      location: deviceData.location,
+      building: deviceData.building,
+      floor: deviceData.floor,
+      room: deviceData.room,
+      description: deviceData.description,
+      manufacturer: deviceData.manufacturer,
+      model: deviceData.model,
+      serialNumber: deviceData.serialNumber,
+      installationDate: deviceData.installationDate,
+      maintenanceInterval: deviceData.maintenanceInterval,
+      controller: {
+        status: "online",
+        signal: Math.floor(85 + Math.random() * 15),
+        lastSeen: new Date().toISOString(),
+      },
+      modules: [
+        { 
+          key: "nivel", 
+          name: `${deviceData.name} - Tanque ${deviceData.capacity}${deviceData.unit}`, 
+          status: "online", 
+          signal: Math.floor(85 + Math.random() * 15), 
+          location: `${deviceData.building}${deviceData.floor ? ` - Piso ${deviceData.floor}` : ''}${deviceData.room ? ` - ${deviceData.room}` : ''}`, 
+          lastSeen: new Date().toISOString() 
+        },
+        { 
+          key: "sensor", 
+          name: `${deviceData.name} - Sensor`, 
+          status: "online", 
+          signal: Math.floor(80 + Math.random() * 20), 
+          location: `${deviceData.building}${deviceData.floor ? ` - Piso ${deviceData.floor}` : ''}${deviceData.room ? ` - ${deviceData.room}` : ''}`, 
+          lastSeen: new Date().toISOString() 
+        },
+        { 
+          key: "actuador", 
+          name: `${deviceData.name} - Válvula`, 
+          status: "online", 
+          signal: Math.floor(75 + Math.random() * 25), 
+          location: `${deviceData.building}${deviceData.floor ? ` - Piso ${deviceData.floor}` : ''}${deviceData.room ? ` - ${deviceData.room}` : ''}`, 
+          lastSeen: new Date().toISOString() 
+        },
+      ],
+      createdAt: deviceData.createdAt,
+      status: deviceData.status,
+      lastMaintenance: deviceData.lastMaintenance,
+      nextMaintenance: deviceData.nextMaintenance
+    };
+
+    const updatedSystems = [...systems, newSystem];
+    saveSystems(updatedSystems);
+    setSystems(updatedSystems);
+  };
+
   return (
     <div className="max-w-6xl mx-auto">
       {/* Título + acciones */}
@@ -260,8 +322,8 @@ export default function DevicesSection() {
             <RefreshCw className={`h-4 w-4 ${refreshing ? "animate-spin" : ""}`} />
             {refreshing ? "Actualizando…" : "Refrescar"}
           </button>
-          <button onClick={addSystem} className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700">
-            <Plus className="h-4 w-4" /> Agregar sistema
+          <button onClick={() => setOpenAddDevice(true)} className="inline-flex items-center gap-2 rounded-md bg-blue-600 px-3 py-2 text-sm text-white hover:bg-blue-700">
+            <Plus className="h-4 w-4" /> Agregar dispositivo
           </button>
         </div>
       </div>
@@ -413,6 +475,12 @@ export default function DevicesSection() {
         open={openDetails}
         onClose={() => setOpenDetails(false)}
         system={currentSystem}    
+      />
+
+      <AddDeviceModal
+        isOpen={openAddDevice}
+        onClose={() => setOpenAddDevice(false)}
+        onSave={handleSaveDevice}
       />
     </div>
   );

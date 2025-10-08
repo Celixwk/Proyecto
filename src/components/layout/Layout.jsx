@@ -3,6 +3,7 @@ import { Outlet } from "react-router-dom";
 import { Menu } from "lucide-react";
 import Sidebar from "@/components/common/Sidebar/Sidebar";
 import UserMenu from "@/components/features/auth/UserMenu";
+import ThemeSwitcher from "@/components/common/ThemeSwitcher";
 
 export default function MainLayout() {
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -28,8 +29,11 @@ export default function MainLayout() {
 
           <div className="flex-1" />
 
-          {/* menú de usuario */}
-          <UserMenu />
+          {/* Theme switcher y menú de usuario */}
+          <div className="flex items-center gap-3">
+            <ThemeSwitcher />
+            <UserMenu />
+          </div>
         </header>
 
         {/* Contenido */}

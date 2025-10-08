@@ -3,6 +3,8 @@ import React from "react";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/context/AuthContext";
+import { ThemeProvider } from "@/context/ThemeContext";
+import ErrorBoundary from "@/components/common/ErrorBoundary";
 
 import ProtectedRoute from "@/routes/ProtectedRoute";
 import MainLayout from "@/components/layout/Layout";
@@ -36,9 +38,11 @@ function NotFound() {
 
 export default function App() {
   return (
-    <AuthProvider>
-      <BrowserRouter>
-        <Routes>
+    <ErrorBoundary>
+      <ThemeProvider>
+        <AuthProvider>
+          <BrowserRouter>
+            <Routes>
           {/* --- Públicas --- */}
           <Route element={<PublicLayout />}>
             <Route index element={<DocsPublic />} />        {/* / */}
@@ -74,9 +78,10 @@ export default function App() {
           {/* 404 global */}
           <Route path="*" element={<NotFound />} />
         </Routes>
-      </BrowserRouter>
-
-      <Toaster position="top-right" richColors />
-    </AuthProvider>
+            <Toaster position="top-right" richColors />
+          </BrowserRouter>
+        </AuthProvider>
+      </ThemeProvider>
+    </ErrorBoundary>
   );
 }
