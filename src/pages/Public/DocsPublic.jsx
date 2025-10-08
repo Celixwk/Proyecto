@@ -3,6 +3,9 @@ import React from "react";
 import { Link } from "react-router-dom";
 import { Droplets, Radio, Cpu, PlugZap, LayoutGrid, Puzzle, Gauge, Activity, Wrench } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import TankViz from "@/components/features/devices/TankViz";
+import SensorDemo from "@/components/features/dashboard/SensorDemo";
+import ValveDemo from "@/components/features/dashboard/ValveDemo";
 
 const SECTIONS = [
   { id: "overview",     title: "Visión general",     icon: <LayoutGrid className="h-4 w-4" /> },
@@ -93,25 +96,185 @@ export default function DocsPublic() {
             </ul>
           </DocSection>
 
-          <DocSection id="tanque" title="Tanque">
-            <p>
-              La visualización del tanque usa <em>SVG</em> con olas y burbujas. Muestra porcentaje y
-              litros estimados (en base a la capacidad configurada). También indica el estado de la válvula.
-            </p>
+          <DocSection id="tanque" title="Tanque de Almacenamiento 500L">
+            <div className="space-y-6">
+              <p>
+                Recipiente cilíndrico vertical de polietileno de alta densidad para almacenamiento de agua.
+                La visualización del tanque usa <em>SVG</em> con olas y burbujas mejoradas. Muestra porcentaje y
+                litros estimados (en base a la capacidad configurada). También indica el estado de la válvula.
+              </p>
+
+              {/* Demostración Interactiva del Tanque */}
+              <div className="bg-white rounded-xl p-6 border shadow-sm">
+                <h3 className="text-xl font-semibold text-gray-800 mb-6 flex items-center">
+                  <Droplets className="w-6 h-6 text-cyan-600 mr-3" />
+                  🎮 Demostración Interactiva - Tanque 500L
+                </h3>
+                
+                <div className="grid lg:grid-cols-2 gap-8">
+                  {/* Visualización del Tanque */}
+                  <div className="space-y-4">
+                    <TankViz
+                      level={75}
+                      capacityLiters={500}
+                      variant="rect"
+                      indicator="chip"
+                      valveOpen={true}
+                      valveSpin={false}
+                      showHeader={true}
+                      showPercent={true}
+                      className="mx-auto"
+                    />
+                  </div>
+
+                  {/* Información del tanque */}
+                  <div className="space-y-6">
+                    <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-lg p-4 border border-blue-200">
+                      <h4 className="font-semibold text-gray-800 mb-3 flex items-center">
+                        <Droplets className="w-5 h-5 text-blue-600 mr-2" />
+                        📊 Especificaciones Técnicas
+                      </h4>
+                      <div className="grid grid-cols-2 gap-3 text-sm">
+                        <div>
+                          <span className="font-medium text-gray-700">Capacidad:</span>
+                          <p className="text-gray-600">500 Litros</p>
+                        </div>
+                        <div>
+                          <span className="font-medium text-gray-700">Diámetro Inferior:</span>
+                          <p className="text-gray-600">0.65 m</p>
+                        </div>
+                        <div>
+                          <span className="font-medium text-gray-700">Diámetro Superior:</span>
+                          <p className="text-gray-600">1.02 m</p>
+                        </div>
+                        <div>
+                          <span className="font-medium text-gray-700">Altura:</span>
+                          <p className="text-gray-600">1.15 m</p>
+                        </div>
+                        <div>
+                          <span className="font-medium text-gray-700">Material:</span>
+                          <p className="text-gray-600">PEAD</p>
+                        </div>
+                        <div>
+                          <span className="font-medium text-gray-700">Peso vacío:</span>
+                          <p className="text-gray-600">25 kg</p>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-lg p-4 border border-green-200">
+                      <h4 className="font-semibold text-gray-800 mb-3 flex items-center">
+                        🎨 Características de la Visualización
+                      </h4>
+                      <ul className="space-y-2 text-sm text-gray-700">
+                        <li className="flex items-start">
+                          <span className="w-2 h-2 bg-green-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
+                          <span><strong>Ondas Multi-capa:</strong> 5 capas de ondas con diferentes frecuencias</span>
+                        </li>
+                        <li className="flex items-start">
+                          <span className="w-2 h-2 bg-blue-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
+                          <span><strong>Burbujas Realistas:</strong> 12 burbujas con movimientos flotantes</span>
+                        </li>
+                        <li className="flex items-start">
+                          <span className="w-2 h-2 bg-purple-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
+                          <span><strong>Gradientes Avanzados:</strong> Múltiples gradientes para profundidad</span>
+                        </li>
+                        <li className="flex items-start">
+                          <span className="w-2 h-2 bg-cyan-500 rounded-full mt-2 mr-3 flex-shrink-0"></span>
+                          <span><strong>Efectos de Flujo:</strong> Animaciones cuando la válvula está abierta</span>
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Variantes del Tanque */}
+              <div className="bg-white rounded-xl p-6 border shadow-sm">
+                <h3 className="text-xl font-semibold text-gray-800 mb-6">
+                  🎨 Variantes del Tanque
+                </h3>
+                
+                <div className="grid md:grid-cols-3 gap-6">
+                  {/* Variante Rectangular */}
+                  <div className="text-center space-y-3">
+                    <TankViz
+                      level={75}
+                      capacityLiters={500}
+                      variant="rect"
+                      indicator="chip"
+                      valveOpen={true}
+                      valveSpin={false}
+                      showHeader={false}
+                      showPercent={true}
+                      className="mx-auto"
+                    />
+                    <h4 className="font-medium text-gray-800">Rectangular</h4>
+                    <p className="text-sm text-gray-600">Forma estándar con bordes redondeados</p>
+                  </div>
+
+                  {/* Variante Drum */}
+                  <div className="text-center space-y-3">
+                    <TankViz
+                      level={45}
+                      capacityLiters={500}
+                      variant="drum"
+                      indicator="chip"
+                      valveOpen={false}
+                      valveSpin={false}
+                      showHeader={false}
+                      showPercent={true}
+                      className="mx-auto"
+                    />
+                    <h4 className="font-medium text-gray-800">Tambor</h4>
+                    <p className="text-sm text-gray-600">Diseño más robusto y cilíndrico</p>
+                  </div>
+
+                  {/* Variante Cylinder */}
+                  <div className="text-center space-y-3">
+                    <TankViz
+                      level={85}
+                      capacityLiters={500}
+                      variant="cyl"
+                      indicator="chip"
+                      valveOpen={true}
+                      valveSpin={true}
+                      showHeader={false}
+                      showPercent={true}
+                      className="mx-auto"
+                    />
+                    <h4 className="font-medium text-gray-800">Cilíndrico</h4>
+                    <p className="text-sm text-gray-600">Forma completamente cilíndrica</p>
+                  </div>
+                </div>
+              </div>
+            </div>
           </DocSection>
 
-          <DocSection id="sensor" title="Sensor ultrasónico">
-            <p>
-              Medimos la distancia al espejo de agua; con la geometría conocida del tanque, transformamos
-              distancia en porcentaje. Es importante filtrar ruido y calibrar el cero/lleno.
-            </p>
+          <DocSection id="sensor" title="Sensor Ultrasónico HC-SR04">
+            <div className="space-y-6">
+              <p>
+                Dispositivo de medición de distancias basado en el principio de tiempo de vuelo de ondas ultrasónicas.
+                Medimos la distancia al espejo de agua; con la geometría conocida del tanque, transformamos
+                distancia en porcentaje. Es importante filtrar ruido y calibrar el cero/lleno.
+              </p>
+
+              {/* Demostración Interactiva del Sensor */}
+              <SensorDemo />
+            </div>
           </DocSection>
 
-          <DocSection id="valvula" title="Válvula solenoide">
-            <p>
-              Se controla con un pin del ESP32 vía relevador/driver. En la UI verás un chip (verde/rojo)
-              y acciones (abrir/cerrar) cuando se integre el control remoto.
-            </p>
+          <DocSection id="valvula" title="Válvula Solenoide">
+            <div className="space-y-6">
+              <p>
+                Actuador electromecánico para el control preciso del flujo de agua en el sistema.
+                Se controla con un pin del ESP32 vía relevador/driver. En la UI verás un chip (verde/rojo)
+                y acciones (abrir/cerrar) cuando se integre el control remoto.
+              </p>
+
+              {/* Demostración Interactiva de la Válvula */}
+              <ValveDemo />
+            </div>
           </DocSection>
 
           <DocSection id="matematicas" title="Matemáticas">

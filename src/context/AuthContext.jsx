@@ -6,6 +6,7 @@ const AuthContext = createContext(null);
 
 const USERS_KEY = "gd_users";
 const SESSION_KEY = "gd_session";
+const SESSION_TIMESTAMP_KEY = "gd_session_timestamp";
 
 // Admin de demo (solo para desarrollo)
 const DEMO_ADMIN = {
@@ -39,9 +40,36 @@ export function AuthProvider({ children }) {
     if (!current.some(u => (u.email || "").toLowerCase() === "admin@demo.com")) {
       write(USERS_KEY, [...current, DEMO_ADMIN]);
     }
+    
+    // Verificar si la sesión ha expirado (24 horas)
     const session = read(SESSION_KEY, null);
-    setUser(session || null);
+    const sessionTimestamp = read(SESSION_TIMESTAMP_KEY, null);
+    const now = Date.now();
+    const SESSION_DURATION = 24 * 60 * 60 * 1000; // 24 horas en milisegundos
+    
+    if (session && sessionTimestamp && (now - sessionTimestamp) < SESSION_DURATION) {
+      setUser(session);
+    } else {
+      // Limpiar sesión expirada
+      localStorage.removeItem(SESSION_KEY);
+      localStorage.removeItem(SESSION_TIMESTAMP_KEY);
+      localStorage.removeItem('auth_token');
+      setUser(null);
+    }
+    
     setLoading(false);
+    
+    // Limpiar sesión al cerrar la ventana/pestaña
+    const handleBeforeUnload = () => {
+      localStorage.removeItem(SESSION_KEY);
+      localStorage.removeItem(SESSION_TIMESTAMP_KEY);
+    };
+    
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    
+    return () => {
+      window.removeEventListener('beforeunload', handleBeforeUnload);
+    };
   }, []);
 
   // API - Con fallback a localStorage para desarrollo
@@ -73,8 +101,10 @@ export function AuthProvider({ children }) {
 
   const login = async (email, password) => {
     try {
+      console.log('Intentando login con API real...', { email });
       // Intentar conectar con la API real
       const response = await apiService.login(email, password);
+      console.log('Respuesta de API:', response);
       
       // Guardar token si la API lo proporciona
       if (response.token) {
@@ -91,16 +121,25 @@ export function AuthProvider({ children }) {
       };
       
       write(SESSION_KEY, session);
+      write(SESSION_TIMESTAMP_KEY, Date.now());
       setUser(session);
       return session;
     } catch (error) {
-      // Fallback a localStorage si la API no está disponible
-      console.warn('API no disponible, usando localStorage:', error.message);
+      console.warn('Error en API real, intentando localStorage:', {
+        error: error.message,
+        status: error.response?.status,
+        data: error.response?.data
+      });
+      
+      // Fallback a localStorage si la API no está disponible o hay error 401
       const users = read(USERS_KEY, []);
       const found = users.find(
         u => (u.email || "").toLowerCase() === email.toLowerCase() && u.password === password
       );
-      if (!found) throw new Error("Credenciales inválidas");
+      if (!found) {
+        console.error('Usuario no encontrado en localStorage:', { email, usersCount: users.length });
+        throw new Error("Credenciales inválidas");
+      }
 
       const session = {
         id: found.id,
@@ -110,6 +149,7 @@ export function AuthProvider({ children }) {
         isAdmin: (found.role || "").toLowerCase() === "admin",
       };
       write(SESSION_KEY, session);
+      write(SESSION_TIMESTAMP_KEY, Date.now());
       setUser(session);
       return session;
     }
@@ -122,8 +162,9 @@ export function AuthProvider({ children }) {
     } catch (error) {
       console.warn('Error al hacer logout en API:', error.message);
     } finally {
-      // Limpiar datos locales
+      // Limpiar todos los datos de sesión locales
       localStorage.removeItem(SESSION_KEY);
+      localStorage.removeItem(SESSION_TIMESTAMP_KEY);
       localStorage.removeItem('auth_token');
       setUser(null);
     }
@@ -155,7 +196,7 @@ export function AuthProvider({ children }) {
   const changePassword = async (currentPassword, newPassword) => {
     try {
       // Intentar cambiar contraseña en la API
-      return await apiService.changePassword(currentPassword, newPassword);
+      return await apiService.updatePassword(currentPassword, newPassword);
     } catch (error) {
       console.warn('Error al cambiar contraseña en API:', error.message);
       throw error;
@@ -167,9 +208,21 @@ export function AuthProvider({ children }) {
   const resetDemo = () => {
     localStorage.removeItem(USERS_KEY);
     localStorage.removeItem(SESSION_KEY);
+    localStorage.removeItem(SESSION_TIMESTAMP_KEY);
     localStorage.removeItem('auth_token');
     write(USERS_KEY, [DEMO_ADMIN]);
     setUser(null);
+    console.log('Demo reset completado. Admin recreado:', DEMO_ADMIN);
+  };
+
+  const createDemoAdmin = () => {
+    const users = read(USERS_KEY, []);
+    if (!users.some(u => (u.email || "").toLowerCase() === "admin@demo.com")) {
+      write(USERS_KEY, [...users, DEMO_ADMIN]);
+      console.log('Admin de demo creado:', DEMO_ADMIN);
+      return true;
+    }
+    return false;
   };
 
   const isAdmin =
@@ -186,7 +239,8 @@ export function AuthProvider({ children }) {
       updateProfile,
       changePassword,
       listUsers, 
-      resetDemo 
+      resetDemo,
+      createDemoAdmin
     }),
     [user, loading, isAdmin]
   );

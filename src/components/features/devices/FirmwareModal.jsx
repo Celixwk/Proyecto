@@ -1,6 +1,6 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useEffect } from "react";
 import useWebSerial from "@/hooks/useWebSerial";
-import { X, Upload, PlugZap, Usb } from "lucide-react";
+import { X, Upload, PlugZap, Usb, Search, Package, Download, Star, Clock } from "lucide-react";
 
 export default function FirmwareModal({ open, onClose, device }) {
   const {
@@ -20,7 +20,7 @@ export default function FirmwareModal({ open, onClose, device }) {
 // Configuración WiFi
 const char* ssid = "TU_WIFI_SSID";
 const char* password = "TU_WIFI_PASSWORD";
-const char* serverURL = "https://iot-api-gyes.onrender.com/api/devices/data";
+const char* serverURL = "https://iot-api.gemapp.click/api/devices/data";
 
 // Pines del ESP32
 #define TRIG_PIN 4    // Pin trigger del HC-SR04
@@ -174,6 +174,153 @@ void handleSerialCommands() {
   `.trim(), []);
 
   const [code, setCode] = useState(defaultSketch);
+  const [showLibraries, setShowLibraries] = useState(false);
+  const [librarySearch, setLibrarySearch] = useState("");
+  const [selectedLibraries, setSelectedLibraries] = useState([]);
+
+  // Base de datos de librerías populares para ESP32
+  const popularLibraries = useMemo(() => [
+    {
+      name: "WiFi",
+      description: "Conectividad WiFi para ESP32",
+      version: "1.0.0",
+      downloads: 1500000,
+      stars: 5000,
+      category: "Network",
+      code: "#include <WiFi.h>"
+    },
+    {
+      name: "HTTPClient",
+      description: "Cliente HTTP para peticiones web",
+      version: "1.0.0",
+      downloads: 800000,
+      stars: 3000,
+      category: "Network",
+      code: "#include <HTTPClient.h>"
+    },
+    {
+      name: "ArduinoJson",
+      description: "Biblioteca para manejo de JSON",
+      version: "7.0.4",
+      downloads: 2000000,
+      stars: 8000,
+      category: "Data",
+      code: "#include <ArduinoJson.h>"
+    },
+    {
+      name: "PubSubClient",
+      description: "Cliente MQTT para IoT",
+      version: "2.8.0",
+      downloads: 600000,
+      stars: 2500,
+      category: "IoT",
+      code: "#include <PubSubClient.h>"
+    },
+    {
+      name: "SPIFFS",
+      description: "Sistema de archivos para ESP32",
+      version: "1.0.0",
+      downloads: 400000,
+      stars: 1500,
+      category: "Storage",
+      code: "#include <SPIFFS.h>"
+    },
+    {
+      name: "WebServer",
+      description: "Servidor web embebido",
+      version: "1.0.0",
+      downloads: 500000,
+      stars: 2000,
+      category: "Network",
+      code: "#include <WebServer.h>"
+    },
+    {
+      name: "EEPROM",
+      description: "Memoria no volátil",
+      version: "2.0.0",
+      downloads: 300000,
+      stars: 1200,
+      category: "Storage",
+      code: "#include <EEPROM.h>"
+    },
+    {
+      name: "BluetoothSerial",
+      description: "Comunicación Bluetooth",
+      version: "1.0.0",
+      downloads: 350000,
+      stars: 1800,
+      category: "Communication",
+      code: "#include <BluetoothSerial.h>"
+    },
+    {
+      name: "Wire",
+      description: "Comunicación I2C",
+      version: "2.0.0",
+      downloads: 700000,
+      stars: 2200,
+      category: "Communication",
+      code: "#include <Wire.h>"
+    },
+    {
+      name: "SPI",
+      description: "Comunicación SPI",
+      version: "1.0.0",
+      downloads: 600000,
+      stars: 2000,
+      category: "Communication",
+      code: "#include <SPI.h>"
+    },
+    {
+      name: "Servo",
+      description: "Control de servomotores",
+      version: "1.1.8",
+      downloads: 450000,
+      stars: 1600,
+      category: "Actuators",
+      code: "#include <Servo.h>"
+    },
+    {
+      name: "DHT",
+      description: "Sensor de temperatura y humedad",
+      version: "1.4.4",
+      downloads: 800000,
+      stars: 3000,
+      category: "Sensors",
+      code: "#include <DHT.h>"
+    }
+  ], []);
+
+  // Filtrar librerías según búsqueda
+  const filteredLibraries = useMemo(() => {
+    if (!librarySearch) return popularLibraries;
+    return popularLibraries.filter(lib => 
+      lib.name.toLowerCase().includes(librarySearch.toLowerCase()) ||
+      lib.description.toLowerCase().includes(librarySearch.toLowerCase()) ||
+      lib.category.toLowerCase().includes(librarySearch.toLowerCase())
+    );
+  }, [popularLibraries, librarySearch]);
+
+  // Agregar librería al código
+  const addLibrary = (library) => {
+    if (selectedLibraries.some(lib => lib.name === library.name)) return;
+    
+    setSelectedLibraries(prev => [...prev, library]);
+    setCode(prev => {
+      const includes = prev.match(/#include.*$/gm) || [];
+      const newInclude = library.code;
+      
+      if (!includes.some(inc => inc.includes(library.name))) {
+        return `${newInclude}\n${prev}`;
+      }
+      return prev;
+    });
+  };
+
+  // Remover librería
+  const removeLibrary = (libraryName) => {
+    setSelectedLibraries(prev => prev.filter(lib => lib.name !== libraryName));
+    setCode(prev => prev.replace(new RegExp(`#include.*${libraryName}.*\n?`, 'g'), ''));
+  };
 
   if (!open) return null;
 
@@ -239,6 +386,14 @@ void handleSerialCommands() {
             title="Intenta poner el ESP32 en modo bootloader (DTR/RTS)"
           >
             <PlugZap className="h-4 w-4" /> Bootloader
+          </button>
+
+          <button
+            onClick={() => setShowLibraries(true)}
+            className="inline-flex items-center gap-2 rounded-md bg-purple-600 px-3 py-1.5 text-sm text-white hover:bg-purple-700"
+            title="Buscar y agregar librerías populares"
+          >
+            <Package className="h-4 w-4" /> Librerías
           </button>
 
           <button
@@ -318,6 +473,125 @@ void handleSerialCommands() {
           <button onClick={onClose} className="rounded-md px-3 py-1 hover:bg-gray-100">Cerrar</button>
         </div>
       </div>
+
+      {/* Modal de Librerías */}
+      {showLibraries && (
+        <div className="fixed inset-0 z-[70] grid place-items-center bg-black/50 p-4">
+          <div className="w-full max-w-4xl max-h-[80vh] overflow-hidden rounded-2xl bg-white shadow-xl">
+            {/* Header del modal de librerías */}
+            <div className="flex items-center justify-between border-b p-4">
+              <div>
+                <h3 className="text-lg font-semibold">Gestor de Librerías ESP32</h3>
+                <p className="text-sm text-gray-600">Busca y agrega librerías populares a tu proyecto</p>
+              </div>
+              <button
+                onClick={() => setShowLibraries(false)}
+                className="rounded-md p-2 text-gray-600 hover:bg-gray-100"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+
+            {/* Barra de búsqueda */}
+            <div className="border-b p-4">
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                <input
+                  type="text"
+                  placeholder="Buscar librerías por nombre, descripción o categoría..."
+                  value={librarySearch}
+                  onChange={(e) => setLibrarySearch(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-purple-200 focus:border-transparent"
+                />
+              </div>
+            </div>
+
+            {/* Librerías seleccionadas */}
+            {selectedLibraries.length > 0 && (
+              <div className="border-b p-4">
+                <h4 className="text-sm font-semibold text-gray-700 mb-2">Librerías Seleccionadas ({selectedLibraries.length})</h4>
+                <div className="flex flex-wrap gap-2">
+                  {selectedLibraries.map((lib) => (
+                    <div
+                      key={lib.name}
+                      className="flex items-center gap-2 bg-purple-100 text-purple-800 px-3 py-1 rounded-full text-sm"
+                    >
+                      <Package className="h-3 w-3" />
+                      <span>{lib.name}</span>
+                      <button
+                        onClick={() => removeLibrary(lib.name)}
+                        className="hover:text-purple-600"
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Lista de librerías */}
+            <div className="max-h-[400px] overflow-y-auto p-4">
+              <div className="grid gap-3">
+                {filteredLibraries.map((lib) => (
+                  <div
+                    key={lib.name}
+                    className={`border rounded-lg p-4 transition-colors ${
+                      selectedLibraries.some(l => l.name === lib.name)
+                        ? 'border-purple-300 bg-purple-50'
+                        : 'border-gray-200 hover:border-purple-200 hover:bg-purple-50'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h5 className="font-semibold text-gray-900">{lib.name}</h5>
+                          <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded">
+                            {lib.category}
+                          </span>
+                          <span className="text-xs text-gray-500">v{lib.version}</span>
+                        </div>
+                        <p className="text-sm text-gray-600 mb-2">{lib.description}</p>
+                        <div className="flex items-center gap-4 text-xs text-gray-500">
+                          <div className="flex items-center gap-1">
+                            <Download className="h-3 w-3" />
+                            <span>{lib.downloads.toLocaleString()}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Star className="h-3 w-3" />
+                            <span>{lib.stars.toLocaleString()}</span>
+                          </div>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => addLibrary(lib)}
+                        disabled={selectedLibraries.some(l => l.name === lib.name)}
+                        className={`px-3 py-1 rounded text-sm font-medium transition-colors ${
+                          selectedLibraries.some(l => l.name === lib.name)
+                            ? 'bg-gray-200 text-gray-500 cursor-not-allowed'
+                            : 'bg-purple-600 text-white hover:bg-purple-700'
+                        }`}
+                      >
+                        {selectedLibraries.some(l => l.name === lib.name) ? 'Agregada' : 'Agregar'}
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Footer del modal de librerías */}
+            <div className="flex items-center justify-end gap-2 border-t p-4">
+              <button
+                onClick={() => setShowLibraries(false)}
+                className="rounded-md px-4 py-2 text-sm hover:bg-gray-100"
+              >
+                Cerrar
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

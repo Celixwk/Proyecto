@@ -1,20 +1,20 @@
 // src/services/api.js
-const API_BASE_URL = 'https://iot-api-gyes.onrender.com';
+import axios from 'axios';
 
 class ApiService {
   constructor() {
-    this.baseURL = API_BASE_URL;
+    // Usar axios con la configuración global ya establecida en main.jsx
+    this.axios = axios;
   }
 
-  // Método para hacer requests HTTP
+  // Método para hacer requests HTTP usando axios
   async request(endpoint, options = {}) {
-    const url = `${this.baseURL}${endpoint}`;
     const config = {
+      ...options,
       headers: {
         'Content-Type': 'application/json',
         ...options.headers,
       },
-      ...options,
     };
 
     // Agregar token de autenticación si existe
@@ -24,107 +24,121 @@ class ApiService {
     }
 
     try {
-      const response = await fetch(url, config);
-      
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        throw new Error(errorData.message || `HTTP error! status: ${response.status}`);
-      }
-
-      return await response.json();
+      const response = await this.axios(endpoint, config);
+      return response.data;
     } catch (error) {
       console.error('API Request failed:', error);
       throw error;
     }
   }
 
-  // Autenticación
+  // Autenticación - Usando las nuevas rutas de la API
   async login(email, password) {
-    return this.request('/api/auth/login', {
+    return this.request('/api/user/login', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      data: { email, password },
     });
   }
 
   async register(userData) {
-    return this.request('/api/auth/register', {
+    return this.request('/api/user/register', {
       method: 'POST',
-      body: JSON.stringify(userData),
+      data: userData,
     });
   }
 
-  async logout() {
-    return this.request('/api/auth/logout', {
+  async requestPasswordReset(email) {
+    return this.request('/api/user/request-password-reset', {
       method: 'POST',
+      data: { email },
     });
   }
 
-  async refreshToken() {
-    return this.request('/api/auth/refresh', {
+  async resetPassword(token, newPassword) {
+    return this.request('/api/user/reset-password', {
       method: 'POST',
-    });
-  }
-
-  // Gestión de usuarios
-  async getUsers() {
-    return this.request('/api/users');
-  }
-
-  async getUserById(id) {
-    return this.request(`/api/users/${id}`);
-  }
-
-  async updateUser(id, userData) {
-    return this.request(`/api/users/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify(userData),
-    });
-  }
-
-  async deleteUser(id) {
-    return this.request(`/api/users/${id}`, {
-      method: 'DELETE',
+      data: { token, newPassword },
     });
   }
 
   // Perfil de usuario
   async getProfile() {
-    return this.request('/api/users/profile');
+    return this.request('/api/user/profile');
   }
 
-  async updateProfile(userData) {
-    return this.request('/api/users/profile', {
+  async updatePassword(currentPassword, newPassword) {
+    return this.request('/api/user/update-password', {
       method: 'PUT',
-      body: JSON.stringify(userData),
+      data: { currentPassword, newPassword },
     });
   }
 
-  async changePassword(currentPassword, newPassword) {
-    return this.request('/api/users/change-password', {
+  async logout() {
+    // Limpiar token local
+    localStorage.removeItem('auth_token');
+    return { success: true };
+  }
+
+  // Admin - Gestión de usuarios
+  async getUsers() {
+    return this.request('/api/user/users');
+  }
+
+  async getUserById(id) {
+    return this.request(`/api/user/${id}`);
+  }
+
+  async updateUser(id, userData) {
+    return this.request(`/api/user/${id}`, {
       method: 'PUT',
-      body: JSON.stringify({ currentPassword, newPassword }),
+      data: userData,
     });
   }
 
-  // Dispositivos IoT
+  async deleteUser(id) {
+    return this.request(`/api/user/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async activateUser(id) {
+    return this.request(`/api/user/${id}/activate`, {
+      method: 'PATCH',
+    });
+  }
+
+  // Dispositivos IoT - Usando las nuevas rutas
+  async createDevice(deviceData) {
+    return this.request('/api/device/create-device', {
+      method: 'POST',
+      data: deviceData,
+    });
+  }
+
   async getDevices() {
-    return this.request('/api/devices');
-  }
-
-  async getDeviceById(id) {
-    return this.request(`/api/devices/${id}`);
+    return this.request('/api/device/device-list');
   }
 
   async updateDevice(id, deviceData) {
-    return this.request(`/api/devices/${id}`, {
+    return this.request(`/api/device/update-device/${id}`, {
       method: 'PUT',
-      body: JSON.stringify(deviceData),
+      data: deviceData,
     });
+  }
+
+  async deleteDevice(id) {
+    return this.request(`/api/device/delete-device/${id}`, {
+      method: 'DELETE',
+    });
+  }
+
+  async getDeviceById(id) {
+    return this.request(`/api/device/${id}`);
   }
 
   async getDeviceData(id, params = {}) {
     const queryString = new URLSearchParams(params).toString();
-    const endpoint = `/api/devices/${id}/data${queryString ? `?${queryString}` : ''}`;
+    const endpoint = `/api/device/${id}/data${queryString ? `?${queryString}` : ''}`;
     return this.request(endpoint);
   }
 
@@ -134,7 +148,7 @@ class ApiService {
   }
 
   async getDeviceMetrics(deviceId) {
-    return this.request(`/api/devices/${deviceId}/metrics`);
+    return this.request(`/api/device/${deviceId}/metrics`);
   }
 }
 

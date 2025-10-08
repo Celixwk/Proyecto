@@ -1,2 +1,2 @@
 //Url de la api de backend
-export const urlBackend = import.meta.env.VITE_URL_BACKEND;
+export const urlBackend = import.meta.env.VITE_URL_BACKEND || 'https://iot-api.gemapp.click';

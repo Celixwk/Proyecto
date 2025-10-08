@@ -6,6 +6,7 @@ import {
   Lock, Unlock // ⬅️ NEW
 } from "lucide-react";
 import TankViz from "@/components/features/devices/TankViz";
+import RealisticValve from "@/components/features/devices/RealisticValve";
 
 const HIST_KEY = "gd_history";
 const MAX_ROWS = 500;
@@ -57,10 +58,10 @@ function getPageNumbers(total, current) {
 export default function SystemDetailsModal({ open, onClose, system }) {
   const [rows, setRows] = useState([]);
 
-  // Nivel actual (para el tanque animado)
+  // Nivel actual (para el tanque animado) - con validación
   const currentLevel = Math.round(rows.at(-1)?.nivel ?? 60);
 
-  // Tendencia y estado de válvula
+  // Tendencia y estado de válvula - con validación
   const last = rows.at(-1) || {};
   const prev = rows.at(-2) || null;
   const valveOpen = String(last.valvula || "").toLowerCase() === "abierta";
@@ -92,6 +93,9 @@ export default function SystemDetailsModal({ open, onClose, system }) {
   // fecha seleccionada y página
   const [selectedDate, setSelectedDate] = useState(null);
   const [page, setPage] = useState(1);
+  const [tankVariant, setTankVariant] = useState("rect");
+  const [isFilling, setIsFilling] = useState(false);
+  const [fillingInterval, setFillingInterval] = useState(null);
 
   // Cargar historial
   useEffect(() => {
@@ -125,6 +129,15 @@ export default function SystemDetailsModal({ open, onClose, system }) {
     return filteredRows.slice(start, start + PAGE_SIZE);
   }, [filteredRows, page]);
 
+  // Limpiar interval al cerrar el modal
+  useEffect(() => {
+    return () => {
+      if (fillingInterval) {
+        clearInterval(fillingInterval);
+      }
+    };
+  }, [fillingInterval]);
+
   if (!open || !system) return null;
 
   const statusOk = (system.controller?.status || "offline") === "online";
@@ -149,27 +162,72 @@ export default function SystemDetailsModal({ open, onClose, system }) {
     });
   };
 
-  // ⬅️ NEW: Abrir/Cerrar válvula con efecto sobre el nivel
+
+  // ⬅️ MEJORADO: Abrir/Cerrar válvula con efecto de llenado progresivo
   const toggleValve = () => {
+    const last = rows.at(-1) || {};
+    const wasOpen = String(last.valvula || "").toLowerCase() === "abierta";
+    const willOpen = !wasOpen;
+
+    // Si se abre la válvula, iniciar llenado progresivo
+    if (willOpen && !wasOpen) {
+      setIsFilling(true);
+      const interval = setInterval(() => {
+        setRows((prev) => {
+          const current = prev.at(-1) || {};
+          const currentLevel = Number(current.nivel ?? 60);
+          
+          // Solo llenar si no está al 100%
+          if (currentLevel >= 100) {
+            setIsFilling(false);
+            clearInterval(interval);
+            return prev;
+          }
+
+          const delta = 2 + Math.random() * 2; // 2-4% cada 2 segundos
+          const nextLevel = Math.max(0, Math.min(100, currentLevel + delta));
+
+          const next = [
+            ...prev,
+            {
+              ts: new Date(),
+              nivel: nextLevel,
+              sensor: Math.max(0, (current.sensor ?? 35) + (Math.random() * 1.2 - 0.6)),
+              valvula: "Abierta",
+              signal: Math.max(40, Math.min(100, (current.signal ?? 80) + (Math.random() * 6 - 3))),
+              note: "Llenando...",
+            },
+          ];
+          
+          if (next.length > MAX_ROWS) next.splice(0, next.length - MAX_ROWS);
+          return next;
+        });
+      }, 2000); // Cada 2 segundos
+      
+      setFillingInterval(interval);
+    } else {
+      // Si se cierra la válvula, detener el llenado
+      if (fillingInterval) {
+        clearInterval(fillingInterval);
+        setFillingInterval(null);
+      }
+      setIsFilling(false);
+    }
+
+    // Actualizar estado inmediatamente
     setRows((prev) => {
       const last = prev.at(-1) || {};
-      const wasOpen = String(last.valvula || "").toLowerCase() === "abierta";
-      const willOpen = !wasOpen;
-
       const prevLevel = Number(last.nivel ?? 60);
-      // si abrimos: sube 2–4%; si cerramos: variación mínima -0.5..+0.5%
-      const delta = willOpen ? (1.5 + Math.random() * 2.5) : (Math.random() * 1 - 0.5);
-      const nextLevel = Math.max(0, Math.min(100, prevLevel + delta));
-
+      
       const next = [
         ...prev,
         {
           ts: new Date(),
-          nivel: nextLevel,
+          nivel: prevLevel,
           sensor: Math.max(0, (last.sensor ?? 35) + (Math.random() * 1.2 - 0.6)),
           valvula: willOpen ? "Abierta" : "Cerrada",
           signal: Math.max(40, Math.min(100, (last.signal ?? 80) + (Math.random() * 6 - 3))),
-          note: "—",
+          note: willOpen ? "Iniciando llenado..." : "Válvula cerrada",
         },
       ];
       if (next.length > MAX_ROWS) next.splice(0, next.length - MAX_ROWS);
@@ -216,42 +274,43 @@ export default function SystemDetailsModal({ open, onClose, system }) {
 
           {/* Body */}
           <div className="overflow-y-auto p-4">
-            {/* Tanque + resumen */}
-            <div className="mb-4 grid gap-4 md:grid-cols-2">
-              <TankViz
-                level={currentLevel}
-                capacityLiters={500}
-                valveOpen={valveOpen}
-                trend={trend}
-              />
-
-              <div className="grid gap-4">
-                <div className="rounded-xl border p-4">
-                  <h4 className="mb-2 text-sm font-semibold text-gray-700">Resumen del sistema</h4>
-                  <div className="grid grid-cols-2 gap-3 text-sm">
-                    <div className="flex items-center gap-2 text-gray-700">
-                      <MapPin className="h-4 w-4 text-gray-400" />
-                      {system.location}
+            {/* Resumen del sistema */}
+            <div className="mb-6">
+              <div className="grid gap-4 md:grid-cols-3">
+                {/* Información del sistema */}
+                <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-4 border border-blue-200">
+                  <h4 className="mb-3 text-sm font-semibold text-gray-700 flex items-center">
+                    <MapPin className="h-4 w-4 text-blue-600 mr-2" />
+                    Información del Sistema
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Ubicación:</span>
+                      <span className="font-medium">{system.location}</span>
                     </div>
-                    <div className="flex items-center gap-2 text-gray-700">
-                      <Wifi className="h-4 w-4 text-gray-400" />
-                      Señal: {system.controller?.signal ?? 0}%
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Señal:</span>
+                      <span className="font-medium">{system.controller?.signal ?? 0}%</span>
                     </div>
-                    <div className="flex items-center gap-2 text-gray-700">
-                      <Clock className="h-4 w-4 text-gray-400" />
-                      Actualizado:{" "}
-                      {system.controller?.lastSeen
-                        ? new Date(system.controller.lastSeen).toLocaleString()
-                        : "—"}
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Estado:</span>
+                      <span className={`font-medium ${statusOk ? 'text-green-600' : 'text-red-600'}`}>
+                        {statusOk ? 'En línea' : 'Fuera de línea'}
+                      </span>
                     </div>
-                    <div className="flex items-center gap-2 text-gray-700">
-                      ID: <span className="font-mono text-xs">{system.id}</span>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">ID:</span>
+                      <span className="font-mono text-xs">{system.id}</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="rounded-xl border p-4">
-                  <h4 className="mb-2 text-sm font-semibold text-gray-700">Módulos</h4>
+                {/* Módulos del sistema */}
+                <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 border border-green-200">
+                  <h4 className="mb-3 text-sm font-semibold text-gray-700 flex items-center">
+                    <Activity className="h-4 w-4 text-green-600 mr-2" />
+                    Módulos Activos
+                  </h4>
                   <div className="flex flex-wrap gap-2">
                     {(system.modules || []).map((m, idx) => {
                       const Icon = iconFor(m.key);
@@ -262,14 +321,356 @@ export default function SystemDetailsModal({ open, onClose, system }) {
                       return (
                         <div
                           key={`${m.key}-${idx}`}
-                          className={`inline-flex items-center gap-2 rounded-full px-2 py-1 text-xs ${chip}`}
+                          className={`inline-flex items-center gap-1 rounded-full px-2 py-1 text-xs ${chip}`}
                           title={`${m.name} • Señal ${m.signal ?? 0}%`}
                         >
-                          <Icon className="h-3.5 w-3.5" />
+                          <Icon className="h-3 w-3" />
                           <span className="font-medium">{m.name}</span>
                         </div>
                       );
                     })}
+                  </div>
+                </div>
+
+                {/* Estado actual */}
+                <div className="bg-gradient-to-br from-purple-50 to-pink-50 rounded-xl p-4 border border-purple-200">
+                  <h4 className="mb-3 text-sm font-semibold text-gray-700 flex items-center">
+                    <Clock className="h-4 w-4 text-purple-600 mr-2" />
+                    Estado Actual
+                  </h4>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Nivel:</span>
+                      <span className="font-bold text-blue-600">{currentLevel}%</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Litros:</span>
+                      <span className="font-bold text-blue-600">{(currentLevel * 5).toFixed(0)}L</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Válvula:</span>
+                      <span className={`font-medium ${valveOpen ? 'text-green-600' : 'text-red-600'}`}>
+                        {valveOpen ? 'Abierta' : 'Cerrada'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-600">Actualizado:</span>
+                      <span className="text-xs">
+                        {system.controller?.lastSeen
+                          ? new Date(system.controller.lastSeen).toLocaleTimeString()
+                          : "—"}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Dispositivos del sistema */}
+            <div className="mb-6">
+              <h4 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                <Settings className="w-5 h-5 text-gray-600 mr-2" />
+                Dispositivos del Sistema
+              </h4>
+              
+              {/* Grid de dispositivos */}
+              <div className="grid gap-6 lg:grid-cols-3">
+                {/* Tanque */}
+                <div className="lg:col-span-2">
+                  <div className="bg-gradient-to-br from-blue-50 to-cyan-50 rounded-xl p-6 border border-blue-200">
+                    <h5 className="text-lg font-semibold text-gray-700 mb-4 flex items-center">
+                      <Droplets className="w-5 h-5 text-blue-600 mr-2" />
+                      Tanque de Agua (500L)
+                    </h5>
+                    <TankViz
+                      level={currentLevel}
+                      capacityLiters={500}
+                      variant={tankVariant}
+                      indicator="chip"
+                      valveOpen={false}
+                      valveSpin={false}
+                      showHeader={false}
+                      showPercent={true}
+                      className="mx-auto"
+                    />
+                    
+                    {/* Selector de variantes del tanque */}
+                    <div className="bg-white/70 rounded-lg p-4 mt-4">
+                      <label className="text-sm font-medium text-gray-700 mb-3 block">
+                        Variante del tanque:
+                      </label>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => setTankVariant("rect")}
+                          className={`px-4 py-2 text-sm rounded-lg transition-colors ${
+                            tankVariant === "rect"
+                              ? 'bg-blue-500 text-white shadow-md'
+                              : 'bg-white text-gray-700 hover:bg-blue-50 border border-gray-300'
+                          }`}
+                        >
+                          Rectangular
+                        </button>
+                        <button
+                          onClick={() => setTankVariant("drum")}
+                          className={`px-4 py-2 text-sm rounded-lg transition-colors ${
+                            tankVariant === "drum"
+                              ? 'bg-blue-500 text-white shadow-md'
+                              : 'bg-white text-gray-700 hover:bg-blue-50 border border-gray-300'
+                          }`}
+                        >
+                          Tambor
+                        </button>
+                        <button
+                          onClick={() => setTankVariant("cyl")}
+                          className={`px-4 py-2 text-sm rounded-lg transition-colors ${
+                            tankVariant === "cyl"
+                              ? 'bg-blue-500 text-white shadow-md'
+                              : 'bg-white text-gray-700 hover:bg-blue-50 border border-gray-300'
+                          }`}
+                        >
+                          Cilíndrico
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Sensor y Válvula */}
+                <div className="space-y-6">
+                  {/* Sensor */}
+                  <div className="bg-gradient-to-br from-green-50 to-emerald-50 rounded-xl p-4 border border-green-200">
+                    <h5 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                      <Activity className="w-4 h-4 text-green-600 mr-2" />
+                      Sensor HC-SR04
+                    </h5>
+                    <div className="text-center space-y-3">
+                      <div className="bg-white/70 rounded-lg p-4">
+                        <div className="text-2xl font-bold text-green-600">
+                          {Math.max(0, (last.sensor ?? 35)).toFixed(1)} cm
+                        </div>
+                        <div className="text-xs text-gray-600 mt-1">Distancia al agua</div>
+                        <div className="text-xs text-gray-500 mt-2 bg-gray-100 rounded px-2 py-1">
+                          Nivel: {currentLevel}% • {(currentLevel * 5).toFixed(0)}L
+                        </div>
+                      </div>
+                      <div className="flex items-center justify-center gap-2">
+                        <div className={`w-2 h-2 rounded-full ${statusOk ? 'bg-green-400 animate-pulse' : 'bg-red-400'}`}></div>
+                        <span className="text-xs text-gray-600 font-medium">
+                          {statusOk ? 'En línea' : 'Fuera de línea'}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Válvula Solenoide */}
+                  <div className="bg-gradient-to-br from-orange-50 to-red-50 rounded-xl p-4 border border-orange-200">
+                    <h5 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
+                      <Settings className="w-4 h-4 text-orange-600 mr-2" />
+                      Válvula Solenoide
+                    </h5>
+                    <div className="space-y-4">
+                      {/* Válvula con animación de giro */}
+                      <div className="relative mx-auto" style={{ width: '120px', height: '120px' }}>
+                        <div className="absolute inset-0 flex items-center justify-center">
+                          {/* Tuberías */}
+                          <div className="absolute left-0 top-1/2 w-12 h-3 bg-gray-400 rounded-full transform -translate-y-1/2"></div>
+                          <div className="absolute right-0 top-1/2 w-12 h-3 bg-gray-400 rounded-full transform -translate-y-1/2"></div>
+                          
+                          {/* Cuerpo de la válvula */}
+                          <div className="relative w-16 h-16 bg-gradient-to-br from-gray-300 to-gray-400 rounded-full shadow-lg border-2 border-gray-500 flex items-center justify-center">
+                            {/* Válvula giratoria */}
+                            <div 
+                              className={`absolute w-12 h-12 bg-gradient-to-br from-blue-400 to-blue-600 rounded-full border-2 border-blue-700 transition-transform duration-500 ${
+                                valveOpen ? 'rotate-90' : 'rotate-0'
+                              }`}
+                              style={{ transformOrigin: 'center' }}
+                            >
+                              {/* Indicador de flujo */}
+                              <div className="absolute inset-0 flex items-center justify-center">
+                                <div 
+                                  className={`w-1 h-8 bg-white rounded-full transition-opacity duration-300 ${
+                                    valveOpen ? 'opacity-100' : 'opacity-30'
+                                  }`}
+                                ></div>
+                              </div>
+                              
+                              {/* Líneas de flujo */}
+                              {valveOpen && (
+                                <>
+                                  <div className="absolute top-1/2 left-1 w-2 h-0.5 bg-white animate-pulse"></div>
+                                  <div className="absolute top-1/2 right-1 w-2 h-0.5 bg-white animate-pulse"></div>
+                                </>
+                              )}
+                            </div>
+                            
+                            {/* Centro fijo */}
+                            <div className="absolute w-4 h-4 bg-gray-600 rounded-full"></div>
+                          </div>
+                          
+                          {/* Indicadores de entrada y salida */}
+                          <div className="absolute left-2 top-1/2 transform -translate-y-1/2">
+                            <div className={`w-2 h-2 rounded-full ${valveOpen ? 'bg-green-400 animate-pulse' : 'bg-gray-400'}`}></div>
+                          </div>
+                          <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
+                            <div className={`w-2 h-2 rounded-full ${valveOpen ? 'bg-green-400 animate-pulse' : 'bg-gray-400'}`}></div>
+                          </div>
+                          
+                          {/* Flechas de flujo */}
+                          {valveOpen && (
+                            <>
+                              <div className="absolute left-6 top-1/2 transform -translate-y-1/2">
+                                <div className="w-0 h-0 border-r-2 border-r-green-400 border-t-1 border-t-transparent border-b-1 border-b-transparent animate-pulse"></div>
+                              </div>
+                              <div className="absolute right-6 top-1/2 transform -translate-y-1/2">
+                                <div className="w-0 h-0 border-l-2 border-l-green-400 border-t-1 border-t-transparent border-b-1 border-b-transparent animate-pulse"></div>
+                              </div>
+                            </>
+                          )}
+                        </div>
+                        
+                        {/* Etiquetas */}
+                        <div className="absolute -bottom-8 left-0 right-0 flex justify-between text-xs text-gray-600 font-medium">
+                          <span className="bg-white px-2 py-1 rounded shadow-sm">Entrada</span>
+                          <span className="bg-white px-2 py-1 rounded shadow-sm">Salida</span>
+                        </div>
+                      </div>
+                      
+                      {/* Estado y control de la válvula */}
+                      <div className="space-y-3">
+                        {/* Estado */}
+                        <div className="text-center">
+                          <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-full text-xs font-medium ${
+                            valveOpen 
+                              ? 'bg-green-100 text-green-800 border border-green-300' 
+                              : 'bg-red-100 text-red-800 border border-red-300'
+                          }`}>
+                            <div className={`w-2 h-2 rounded-full ${valveOpen ? 'bg-green-500' : 'bg-red-500'}`}></div>
+                            {valveOpen ? 'Abierta' : 'Cerrada'}
+                          </div>
+                        </div>
+                        
+                        {/* Botón de control */}
+                        <div className="text-center">
+                          <button
+                            onClick={toggleValve}
+                            className={`px-4 py-2 rounded-lg font-medium transition-colors text-sm shadow-sm ${
+                              valveOpen
+                                ? 'bg-red-100 text-red-800 border border-red-300 hover:bg-red-200'
+                                : 'bg-green-100 text-green-800 border border-green-300 hover:bg-green-200'
+                            }`}
+                          >
+                            {valveOpen ? '🔒 Cerrar Válvula' : '🔓 Abrir Válvula'}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Controles del sistema */}
+            <div className="mb-6">
+              <h4 className="text-lg font-semibold text-gray-800 mb-4 flex items-center">
+                <Settings className="w-5 h-5 text-gray-600 mr-2" />
+                Controles del Sistema
+              </h4>
+              
+              <div className="bg-gradient-to-br from-gray-50 to-slate-50 rounded-xl p-6 border border-gray-200">
+                <div className="grid gap-6 md:grid-cols-2">
+                  {/* Control manual del nivel */}
+                  <div className="space-y-4">
+                    <h5 className="text-sm font-semibold text-gray-700 flex items-center">
+                      <Droplets className="w-4 h-4 text-blue-600 mr-2" />
+                      Control de Nivel
+                    </h5>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm font-medium text-gray-700">Nivel actual:</span>
+                        <span className="text-lg font-bold text-blue-600">{currentLevel}%</span>
+                      </div>
+                      <input
+                        type="range"
+                        min="0"
+                        max="100"
+                        value={currentLevel}
+                        onChange={(e) => {
+                          const newLevel = Number(e.target.value);
+                          setRows((prev) => {
+                            const next = [
+                              ...prev,
+                              {
+                                ts: new Date(),
+                                nivel: newLevel,
+                                sensor: Math.max(0, (prev.at(-1)?.sensor ?? 35) + (Math.random() * 1.2 - 0.6)),
+                                valvula: prev.at(-1)?.valvula || "Abierta",
+                                signal: Math.max(40, Math.min(100, (prev.at(-1)?.signal ?? 80) + (Math.random() * 6 - 3))),
+                                note: "Ajuste manual",
+                              },
+                            ];
+                            if (next.length > MAX_ROWS) next.splice(0, next.length - MAX_ROWS);
+                            return next;
+                          });
+                        }}
+                        className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                      />
+                      <div className="flex justify-between text-xs text-gray-500">
+                        <span>0%</span>
+                        <span>500L</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Estado del sistema */}
+                  <div className="space-y-4">
+                    <h5 className="text-sm font-semibold text-gray-700 flex items-center">
+                      <Activity className="w-4 h-4 text-green-600 mr-2" />
+                      Estado del Sistema
+                    </h5>
+                    <div className="space-y-3">
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Válvula:</span>
+                        <span className={`px-3 py-1 rounded-lg text-xs font-medium ${
+                          valveOpen
+                            ? isFilling 
+                              ? 'bg-blue-100 text-blue-800 border border-blue-300'
+                              : 'bg-green-100 text-green-800 border border-green-300'
+                            : 'bg-red-100 text-red-800 border border-red-300'
+                        }`}>
+                          {isFilling ? 'Llenando...' : valveOpen ? 'Abierta' : 'Cerrada'}
+                        </span>
+                      </div>
+                      
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Sensor:</span>
+                        <span className={`px-3 py-1 rounded-lg text-xs font-medium ${
+                          statusOk ? 'bg-green-100 text-green-800 border border-green-300' : 'bg-red-100 text-red-800 border border-red-300'
+                        }`}>
+                          {statusOk ? 'En línea' : 'Fuera de línea'}
+                        </span>
+                      </div>
+
+                      <div className="flex justify-between items-center">
+                        <span className="text-sm text-gray-600">Señal:</span>
+                        <span className="text-sm font-medium text-gray-800">{system.controller?.signal ?? 0}%</span>
+                      </div>
+                    </div>
+
+                    {/* Indicador de llenado progresivo */}
+                    {isFilling && (
+                      <div className="space-y-2 bg-blue-50 rounded-lg p-3 border border-blue-200">
+                        <div className="flex justify-between text-xs text-blue-700">
+                          <span>Llenado automático</span>
+                          <span>{currentLevel}%</span>
+                        </div>
+                        <div className="w-full bg-blue-200 rounded-full h-2">
+                          <div 
+                            className="bg-blue-500 h-2 rounded-full transition-all duration-500 ease-out"
+                            style={{ width: `${currentLevel}%` }}
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
@@ -281,19 +682,6 @@ export default function SystemDetailsModal({ open, onClose, system }) {
                 <h4 className="text-sm font-semibold text-gray-700">Historial de telemetría</h4>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  {/* ⬅️ NEW: Abrir/Cerrar válvula */}
-                  <button
-                    onClick={toggleValve}
-                    className={`inline-flex items-center gap-2 rounded-md px-3 py-1.5 text-xs
-                      ${valveOpen
-                        ? "border border-rose-200 text-rose-700 hover:bg-rose-50"
-                        : "border border-emerald-200 text-emerald-700 hover:bg-emerald-50"}`}
-                    title={valveOpen ? "Cerrar válvula" : "Abrir válvula"}
-                  >
-                    {valveOpen ? <Lock className="h-4 w-4" /> : <Unlock className="h-4 w-4" />}
-                    {valveOpen ? "Cerrar válvula" : "Abrir válvula"}
-                  </button>
-
                   {/* Simular registro */}
                   <button
                     onClick={addFakeRow}

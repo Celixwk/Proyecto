@@ -1,17 +1,15 @@
 // src/components/DevicesSection/TankViz.jsx
 import React, { useId, useMemo } from "react";
+import RealisticValve from "./RealisticValve";
 
 /**
- * TankViz
+ * TankViz - Versión simplificada y funcional
  * - level: 0..100 (%)
  * - capacityLiters: número (ej. 500)  -> usado para mostrar litros
  * - variant: "rect" | "drum" | "cyl"
  * - indicator: "chip" | "bar" | "none"
- *      "chip": (compat) ahora muestra SOLO el icono SVG grande de válvula, sin fondo ni texto
- *      "bar" : barrita lateral
- *      "none": sin indicador
  * - valveOpen: true/false
- * - valveSpin: true/false => anima un "vaivén" corto (útil al simular registro)
+ * - valveSpin: true/false => anima un "vaivén" corto
  * - showHeader: muestra el título interno "Tanque XXX L"
  * - showPercent: muestra %/litros arriba a la derecha
  * - className: estilos extra
@@ -22,7 +20,7 @@ export default function TankViz({
   variant = "rect",
   indicator = "chip",
   valveOpen = true,
-  valveSpin = false,   // NUEVO: vaivén opcional
+  valveSpin = false,
   showHeader = false,
   showPercent = true,
   className = "",
@@ -31,14 +29,14 @@ export default function TankViz({
   const clipId = `${rid}-clip`;
   const gradId = `${rid}-grad`;
 
-  const W = 260;
-  const H = 180;
+  const W = 320;  // Aumentado de 260 a 320
+  const H = 220;  // Aumentado de 180 a 220
   const viewBox = `0 0 ${W} ${H}`;
 
   const shape = useMemo(() => {
     switch (variant) {
       case "drum": {
-        const x = 40, y = 26, w = 180, h = 130, r = 20;
+        const x = 50, y = 30, w = 220, h = 160, r = 25;
         return {
           content: { x, y, w, h },
           clipPath: <path d={roundedRectPath(x, y, w, h, r)} />,
@@ -46,431 +44,323 @@ export default function TankViz({
         };
       }
       case "cyl": {
-        const x = 30, y = 40, w = 200, h = 100, r = 50;
+        const x = 40, y = 50, w = 240, h = 120, r = 60;
         return {
           content: { x, y, w, h },
-          clipPath: <rect x={x} y={y} width={w} height={h} rx={r} ry={r} />,
-          outline: <rect x={x} y={y} width={w} height={h} rx={r} ry={r} stroke="#0f172a" strokeWidth="3" fill="none" />,
+          clipPath: <path d={roundedRectPath(x, y, w, h, r)} />,
+          outline: <path d={roundedRectPath(x, y, w, h, r)} stroke="#0f172a" strokeWidth="3" fill="none" />,
         };
       }
-      case "rect":
       default: {
-        const x = 30, y = 20, w = 180, h = 140, r = 12;
+        const x = 40, y = 25, w = 240, h = 170;
         return {
           content: { x, y, w, h },
-          clipPath: <rect x={x} y={y} width={w} height={h} rx={r} ry={r} />,
-          outline: <rect x={x} y={y} width={w} height={h} rx={r} ry={r} stroke="#0f172a" strokeWidth="3" fill="none" />,
+          clipPath: <rect x={x} y={y} width={w} height={h} rx="10" />,
+          outline: <rect x={x} y={y} width={w} height={h} rx="10" stroke="#0f172a" strokeWidth="3" fill="none" />,
         };
       }
     }
   }, [variant]);
 
-  // nivel / agua
-  const { x, y, w, h } = shape.content;
-  const pct = Math.max(0, Math.min(100, level));
-  const waterTop = y + (1 - pct / 100) * h;
+  const waterHeight = useMemo(() => {
+    const { h } = shape.content;
+    return (level / 100) * h;
+  }, [level, shape.content]);
 
-  // litros calculados
-  const liters = Math.max(0, Math.round((capacityLiters || 0) * (pct / 100)));
-  const litersText = capacityLiters > 0 ? `${liters.toLocaleString()} L` : "";
-
-  const valveColor = valveOpen ? "#10b981" : "#ef4444";
-
-  // burbujas pequeñas y sutiles
-  const bubbles = useMemo(
-    () =>
-      Array.from({ length: 8 }).map((_, i) => {
-        const bx = x + 25 + ((i * 22) % (w - 50));
-        const delay = (i * 0.4).toFixed(2) + "s";
-        const r = 0.8 + (i % 3) * 0.3; // solo burbujas pequeñas
-        
-        return (
-          <circle
-            key={i}
-            cx={bx}
-            cy={y + h - 10}
-            r={r}
-            fill="rgba(255,255,255,0.8)"
-            stroke="rgba(255,255,255,0.4)"
-            strokeWidth="0.3"
-            className="bubble-small"
-            style={{ animationDelay: delay }}
-          />
-        );
-      }),
-    [x, y, w, h]
-  );
-
-  // Efectos de flujo cuando la válvula está abierta (dentro del tanque)
-  const flowEffects = useMemo(() => {
-    if (!valveOpen || level <= 5) return null;
-    
-    return Array.from({ length: 4 }).map((_, i) => {
-      const flowX = x + 20 + (i * 35);
-      const flowY = waterTop + 15 + (i * 8);
-      
-      // Solo mostrar si está dentro del área del agua
-      if (flowY > waterTop && flowY < y + h - 10) {
-        return (
-          <g key={`flow-${i}`} clipPath={`url(#${clipId})`}>
-            <path
-              d={`M ${flowX} ${flowY} Q ${flowX + 15} ${flowY - 3} ${flowX + 30} ${flowY} Q ${flowX + 45} ${flowY + 3} ${flowX + 60} ${flowY}`}
-              stroke="rgba(255, 255, 255, 0.7)"
-              strokeWidth="1.5"
-              fill="none"
-              className="flow-effect"
-              style={{ animationDelay: `${i * 0.3}s` }}
-            />
-          </g>
-        );
-      }
-      return null;
-    });
-  }, [valveOpen, x, w, waterTop, y, h, level, clipId]);
+  const valveColor = valveOpen ? "#22c55e" : "#ef4444";
 
   return (
     <div className={`rounded-2xl border bg-white p-4 shadow-sm ${className}`}>
-      {/* Animaciones MEJORADAS y REALISTAS */}
+      {/* Estilos mejorados con animaciones fluidas */}
       <style>{`
-        /* === ANIMACIONES DE VÁLVULA === */
+        .valve-wiggle {
+          animation: valveWiggle 1.5s ease-in-out infinite;
+        }
+        
+        .valve-open {
+          animation: valvePulse 2s ease-in-out infinite;
+        }
+        
+        .valve-closed {
+          animation: valvePulseRed 2s ease-in-out infinite;
+        }
+
         @keyframes valveWiggle {
-          0% { transform: translateX(0) rotate(0) scale(1); }
-          25% { transform: translateX(8px) rotate(12deg) scale(1.05); }
-          50% { transform: translateX(12px) rotate(18deg) scale(1.08); }
-          75% { transform: translateX(8px) rotate(12deg) scale(1.05); }
-          100%{ transform: translateX(0) rotate(0) scale(1); }
+          0% { transform: translateX(0) rotate(0); }
+          25% { transform: translateX(4px) rotate(5deg); }
+          50% { transform: translateX(8px) rotate(10deg); }
+          75% { transform: translateX(4px) rotate(5deg); }
+          100% { transform: translateX(0) rotate(0); }
         }
 
-        @keyframes valveOpen {
-          0% { transform: translateX(0) rotate(0) scale(1); }
-          50% { transform: translateX(6px) rotate(9deg) scale(1.03); }
-          100% { transform: translateX(12px) rotate(16deg) scale(1.02); }
+        /* Animaciones de válvula realistas */
+        @keyframes rotateValveOpen {
+          0% { transform: rotate(0deg); }
+          20% { transform: rotate(-5deg); }
+          100% { transform: rotate(90deg); }
         }
 
-        @keyframes valveClose {
-          0% { transform: translateX(12px) rotate(16deg) scale(1.02); }
-          50% { transform: translateX(6px) rotate(8deg) scale(1.03); }
-          100% { transform: translateX(0) rotate(0) scale(1); }
+        @keyframes rotateValveClose {
+          0% { transform: rotate(90deg); }
+          20% { transform: rotate(95deg); }
+          100% { transform: rotate(0deg); }
+        }
+
+        @keyframes glowOpen {
+          0% { filter: drop-shadow(0 0 5px rgba(34, 197, 94, 0)); }
+          100% { filter: drop-shadow(0 0 20px rgba(34, 197, 94, 0.6)); }
+        }
+
+        @keyframes glowClose {
+          0% { filter: drop-shadow(0 0 20px rgba(34, 197, 94, 0.6)); }
+          100% { filter: drop-shadow(0 0 5px rgba(239, 68, 68, 0)); }
+        }
+
+        .valve-rotating-open {
+          animation: rotateValveOpen 1.2s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+        }
+
+        .valve-rotating-close {
+          animation: rotateValveClose 1s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+        }
+
+        .glow-opening {
+          animation: glowOpen 0.8s ease-out forwards 0.4s;
+        }
+
+        .glow-closing {
+          animation: glowClose 0.6s ease-in forwards;
         }
 
         @keyframes valvePulse {
-          0%, 100% { filter: drop-shadow(0 0 0 rgba(16, 185, 129, 0)); }
-          50% { filter: drop-shadow(0 0 8px rgba(16, 185, 129, 0.4)); }
+          0%, 100% { 
+            filter: drop-shadow(0 0 0 rgba(34, 197, 94, 0));
+            box-shadow: 0 0 0 rgba(34, 197, 94, 0);
+          }
+          50% { 
+            filter: drop-shadow(0 0 15px rgba(34, 197, 94, 0.9));
+            box-shadow: 0 0 25px rgba(34, 197, 94, 0.7);
+          }
         }
 
         @keyframes valvePulseRed {
-          0%, 100% { filter: drop-shadow(0 0 0 rgba(239, 68, 68, 0)); }
-          50% { filter: drop-shadow(0 0 8px rgba(239, 68, 68, 0.4)); }
+          0%, 100% { 
+            filter: drop-shadow(0 0 0 rgba(239, 68, 68, 0));
+            box-shadow: 0 0 0 rgba(239, 68, 68, 0);
+          }
+          50% { 
+            filter: drop-shadow(0 0 15px rgba(239, 68, 68, 0.9));
+            box-shadow: 0 0 25px rgba(239, 68, 68, 0.7);
+          }
         }
 
-        /* === ANIMACIONES DE AGUA REALISTAS === */
-        @keyframes waveShift { 
-          0% { transform: translateX(0); } 
-          100% { transform: translateX(-120px); } 
-        }
-        
-        @keyframes waveBob { 
-          0%, 100% { transform: translateY(0) scaleY(1); } 
-          33% { transform: translateY(-1px) scaleY(1.02); }
-          66% { transform: translateY(1px) scaleY(0.98); }
-        }
-        
-        @keyframes waveRipple { 
-          0% { transform: translateY(0) scale(1); opacity: 0.9; } 
-          50% { transform: translateY(-0.5px) scale(1.01); opacity: 0.7; }
-          100% { transform: translateY(0) scale(1); opacity: 0.9; } 
-        }
-        
-        @keyframes waterReflection { 
-          0% { transform: translateX(0) scaleX(1); opacity: 0.8; } 
-          50% { transform: translateX(-10px) scaleX(1.02); opacity: 0.6; }
-          100% { transform: translateX(-20px) scaleX(1); opacity: 0.8; } 
-        }
-        
-        @keyframes surfaceShimmer { 
-          0% { opacity: 0.8; transform: translateY(0); }
-          25% { opacity: 1; transform: translateY(-0.5px); }
-          50% { opacity: 0.9; transform: translateY(0); }
-          75% { opacity: 0.7; transform: translateY(0.5px); }
-          100% { opacity: 0.8; transform: translateY(0); }
+        /* === ANIMACIONES DE AGUA FLUIDAS === */
+        .water-animation {
+          animation: waterBob 4s ease-in-out infinite, waterFlow 6s linear infinite;
         }
 
-        /* === ANIMACIONES DE BURBUJAS MEJORADAS === */
-        @keyframes bubbleUp { 
-          0% { transform: translateY(0) scale(0.5); opacity: 0; }
-          10% { opacity: 0.8; transform: scale(1); }
-          90% { opacity: 0.6; }
-          100% { transform: translateY(-${h - 14}px) scale(0.3); opacity: 0; } 
-        }
-        
-        @keyframes bubbleFloat { 
-          0% { transform: translateX(0) translateY(0); }
-          25% { transform: translateX(3px) translateY(-1px); }
-          50% { transform: translateX(0) translateY(-2px); }
-          75% { transform: translateX(-3px) translateY(-1px); }
-          100% { transform: translateX(0) translateY(0); }
+        .water-surface {
+          animation: surfaceWave 3s ease-in-out infinite;
         }
 
-        /* === ANIMACIONES DE LLENADO === */
-        @keyframes fillRipple { 
-          0% { transform: scale(0.8) translateY(0); opacity: 0.8; }
-          50% { transform: scale(1.1) translateY(-2px); opacity: 0.6; }
-          100% { transform: scale(1.2) translateY(-4px); opacity: 0; }
-        }
-        
-        @keyframes fillWave { 
-          0% { transform: translateY(0) scaleY(1); }
-          50% { transform: translateY(-5px) scaleY(1.2); }
-          100% { transform: translateY(-8px) scaleY(1.4); }
+        .water-bubbles {
+          animation: bubbleRise 4s ease-in-out infinite;
         }
 
-        /* === ANIMACIONES DE FLUJO MEJORADAS === */
-        @keyframes waterFlow { 
-          0% { transform: translateX(-30px) translateY(0); opacity: 0.3; }
-          25% { transform: translateX(-15px) translateY(-1px); opacity: 0.7; }
-          50% { transform: translateX(0) translateY(-2px); opacity: 0.9; }
-          75% { transform: translateX(15px) translateY(-1px); opacity: 0.7; }
-          100% { transform: translateX(30px) translateY(0); opacity: 0.3; }
-        }
-        
-        @keyframes streamEffect { 
-          0% { transform: translateY(0) scaleY(1) scaleX(1); opacity: 0.8; }
-          50% { transform: translateY(5px) scaleY(1.1) scaleX(1.05); opacity: 0.6; }
-          100% { transform: translateY(10px) scaleY(1.2) scaleX(1.1); opacity: 0.3; }
-        }
-        
-        @keyframes flowRipple { 
-          0% { transform: scale(0.8) translateY(0); opacity: 0.6; }
-          50% { transform: scale(1.1) translateY(-2px); opacity: 0.8; }
-          100% { transform: scale(1.3) translateY(-4px); opacity: 0.2; }
+        @keyframes waterBob {
+          0%, 100% { 
+            transform: translateY(0) scaleY(1); 
+            opacity: 0.9;
+          }
+          25% { 
+            transform: translateY(-2px) scaleY(1.02); 
+            opacity: 1;
+          }
+          50% { 
+            transform: translateY(-1px) scaleY(1.01); 
+            opacity: 0.95;
+          }
+          75% { 
+            transform: translateY(-3px) scaleY(1.03); 
+            opacity: 1;
+          }
         }
 
-        /* === CLASES DE ANIMACIÓN === */
-        .valve-root { 
-          display: inline-block; 
-          transform-origin: 50% 50%; 
+        @keyframes waterFlow {
+          0% { 
+            background-position: 0% 0%; 
+          }
+          100% { 
+            background-position: 100% 0%; 
+          }
         }
 
-        .valve-body { 
-          transform-origin: 50% 50%; 
-          transition: all 0.6s cubic-bezier(0.34, 1.56, 0.64, 1);
+        @keyframes surfaceWave {
+          0%, 100% { 
+            transform: translateX(0) scaleY(1); 
+            opacity: 0.8;
+          }
+          33% { 
+            transform: translateX(-5px) scaleY(1.1); 
+            opacity: 1;
+          }
+          66% { 
+            transform: translateX(5px) scaleY(0.9); 
+            opacity: 0.9;
+          }
         }
 
-        .valve-open {
-          animation: valveOpen 0.8s cubic-bezier(0.34, 1.56, 0.64, 1) forwards,
-                     valvePulse 2s ease-in-out infinite 0.8s;
+        @keyframes bubbleRise {
+          0% { 
+            transform: translateY(0) scale(0.8); 
+            opacity: 0.6;
+          }
+          50% { 
+            transform: translateY(-8px) scale(1); 
+            opacity: 0.8;
+          }
+          100% { 
+            transform: translateY(-15px) scale(1.2); 
+            opacity: 0;
+          }
         }
 
-        .valve-closed {
-          animation: valveClose 0.6s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards,
-                     valvePulseRed 3s ease-in-out infinite 0.6s;
+        /* === ANIMACIÓN DE LLENADO === */
+        .water-filling {
+          animation: waterRise 2s ease-out;
         }
 
-        .valve-wiggle {
-          animation: valveWiggle 0.8s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards !important;
-        }
-
-        /* === CLASES DEL AGUA REALISTAS === */
-        .wave1 { 
-          animation: waveShift 8s linear infinite, 
-                     waveBob 6s ease-in-out infinite,
-                     surfaceShimmer 4s ease-in-out infinite; 
-        }
-        
-        .wave2 { 
-          animation: waveShift 10s linear infinite reverse, 
-                     waveBob 8s ease-in-out infinite, 
-                     waterReflection 12s ease-in-out infinite;
-        }
-        
-        .wave3 { 
-          animation: waveShift 9s linear infinite, 
-                     waveBob 7s ease-in-out infinite,
-                     waveRipple 6s ease-in-out infinite;
-        }
-
-        /* === CLASES DE BURBUJAS === */
-        .bubble-small { 
-          animation: bubbleUp 4s ease-in infinite, bubbleFloat 2.5s ease-in-out infinite;
-        }
-
-        /* === CLASES DE EFECTOS === */
-        .water-surface { 
-          transition: all 0.8s cubic-bezier(0.25, 0.46, 0.45, 0.94);
-          filter: drop-shadow(0 0 2px rgba(59, 130, 246, 0.3));
-        }
-        
-        .fill-effect { 
-          animation: fillRipple 2s ease-out infinite;
-        }
-        
-        .flow-effect { 
-          animation: waterFlow 4s linear infinite, 
-                     streamEffect 3s ease-in-out infinite,
-                     flowRipple 2s ease-in-out infinite;
+        @keyframes waterRise {
+          0% { 
+            transform: translateY(100%) scaleY(0); 
+            opacity: 0;
+          }
+          50% { 
+            transform: translateY(50%) scaleY(0.5); 
+            opacity: 0.7;
+          }
+          100% { 
+            transform: translateY(0%) scaleY(1); 
+            opacity: 1;
+          }
         }
       `}</style>
 
-      {showHeader && (
-        <div className="mb-2 flex items-baseline justify-between">
-          <h3 className="font-semibold text-gray-900">Tanque {capacityLiters.toLocaleString()} L</h3>
-          <span className="text-sm text-gray-500">
-            {pct}%{capacityLiters > 0 ? ` • ${litersText}` : ""}
-          </span>
-        </div>
-      )}
-
-      <div className="relative mx-auto aspect-[13/9] w-full max-w-[520px]">
-        {/* Indicador: icono de válvula grande (sin texto ni fondo) */}
-        {indicator !== "none" && indicator !== "bar" && (
-          <div className="absolute left-2 top-2">
-            <ValveIcon
-              size={28}
-              color={valveColor}
-              className={[
-                "valve-root",
-                valveSpin ? "valve-wiggle" : "",
-              ].join(" ")}
-              stateClass={valveOpen ? "valve-open" : "valve-closed"}
-            />
+      <div className="text-center mb-2">
+        {showHeader && <h3 className="text-lg font-semibold">Tanque {capacityLiters}L</h3>}
+        {showPercent && (
+          <div className="text-sm text-gray-600">
+            {level}% ({Math.round((level / 100) * capacityLiters)}L)
           </div>
         )}
-
-        {/* %/litros arriba a la derecha (cuando no usamos header) */}
-        {!showHeader && showPercent && (
-          <div className="absolute right-2 top-2 rounded-full bg-white/70 px-2 py-0.5 text-xs text-gray-700 backdrop-blur">
-            {pct}%{capacityLiters > 0 ? ` • ${litersText}` : ""}
           </div>
-        )}
 
-        <svg viewBox={viewBox} className="h-full w-full">
+      <div className="relative">
+        <svg width={W} height={H} viewBox={viewBox} className="mx-auto">
           <defs>
-            <clipPath id={clipId}>{shape.clipPath}</clipPath>
-
-            {/* Gradiente principal del agua - más contrastante */}
+            {/* Gradiente principal del agua más realista */}
             <linearGradient id={gradId} x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor="#0ea5e9" stopOpacity="1" />
-              <stop offset="20%" stopColor="#0284c7" stopOpacity="0.95" />
-              <stop offset="50%" stopColor="#0369a1" stopOpacity="0.9" />
-              <stop offset="80%" stopColor="#075985" stopOpacity="0.95" />
-              <stop offset="100%" stopColor="#0c4a6e" stopOpacity="1" />
+              <stop offset="0%" stopColor="#87CEEB" stopOpacity="1" />
+              <stop offset="15%" stopColor="#4682B4" stopOpacity="0.95" />
+              <stop offset="35%" stopColor="#1E90FF" stopOpacity="0.9" />
+              <stop offset="60%" stopColor="#0066CC" stopOpacity="0.85" />
+              <stop offset="85%" stopColor="#003D82" stopOpacity="0.9" />
+              <stop offset="100%" stopColor="#002147" stopOpacity="0.95" />
             </linearGradient>
 
-            {/* Gradiente de superficie muy visible */}
+            {/* Gradiente de superficie con brillo */}
             <linearGradient id={`${gradId}-surface`} x1="0" x2="0" y1="0" y2="1">
+              <stop offset="0%" stopColor="#ffffff" stopOpacity="0.9" />
+              <stop offset="20%" stopColor="#f0f8ff" stopOpacity="0.8" />
+              <stop offset="50%" stopColor="#e6f3ff" stopOpacity="0.6" />
+              <stop offset="80%" stopColor="#cce7ff" stopOpacity="0.4" />
+              <stop offset="100%" stopColor="#99d6ff" stopOpacity="0.2" />
+            </linearGradient>
+
+            {/* Gradiente para burbujas */}
+            <radialGradient id={`${gradId}-bubble`} cx="0.5" cy="0.5" r="0.5">
               <stop offset="0%" stopColor="#ffffff" stopOpacity="0.8" />
-              <stop offset="30%" stopColor="#e0f2fe" stopOpacity="0.6" />
-              <stop offset="70%" stopColor="#7dd3fc" stopOpacity="0.4" />
-              <stop offset="100%" stopColor="#38bdf8" stopOpacity="0.3" />
-            </linearGradient>
-
-            {/* Gradiente de ondas principales */}
-            <linearGradient id={`${gradId}-waves`} x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor="#38bdf8" stopOpacity="0.9" />
-              <stop offset="50%" stopColor="#0ea5e9" stopOpacity="0.8" />
-              <stop offset="100%" stopColor="#0284c7" stopOpacity="0.7" />
-            </linearGradient>
-
-            {/* Gradiente de reflexión */}
-            <linearGradient id={`${gradId}-reflection`} x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor="#ffffff" stopOpacity="0.7" />
-              <stop offset="50%" stopColor="#e0f2fe" stopOpacity="0.4" />
-              <stop offset="100%" stopColor="#7dd3fc" stopOpacity="0.2" />
-            </linearGradient>
-
-            {/* Gradiente de profundidad */}
-            <linearGradient id={`${gradId}-depth`} x1="0" x2="0" y1="0" y2="1">
-              <stop offset="0%" stopColor="#0284c7" stopOpacity="0.8" />
-              <stop offset="100%" stopColor="#0c4a6e" stopOpacity="0.95" />
-            </linearGradient>
+              <stop offset="70%" stopColor="#e6f3ff" stopOpacity="0.4" />
+              <stop offset="100%" stopColor="#cce7ff" stopOpacity="0" />
+            </radialGradient>
+            
+            <clipPath id={clipId}>
+              {shape.clipPath}
+            </clipPath>
           </defs>
 
-          {/* Agua recortada con múltiples capas */}
+          {/* Fondo del tanque */}
+          <rect x={shape.content.x} y={shape.content.y} width={shape.content.w} height={shape.content.h} fill="#f8fafc" rx="8" />
+          
+          {/* Agua con múltiples capas */}
           <g clipPath={`url(#${clipId})`}>
-            {/* Base del agua con gradiente */}
+            {/* Capa principal del agua */}
             <rect 
-              x={x} 
-              y={waterTop} 
-              width={w} 
-              height={y + h - waterTop} 
+              x={shape.content.x}
+              y={shape.content.y + shape.content.h - waterHeight}
+              width={shape.content.w}
+              height={waterHeight}
               fill={`url(#${gradId})`} 
-              className="water-surface"
+              className="water-animation"
             />
             
-            {/* Sombra interna para dar profundidad */}
+            {/* Capa de profundidad */}
+            {level > 20 && (
             <rect 
-              x={x + 2} 
-              y={waterTop + 2} 
-              width={w - 4} 
-              height={y + h - waterTop - 4} 
-              fill="rgba(0, 0, 0, 0.1)"
-              opacity="0.3"
-            />
-
-            {/* Superficie del agua - más visible y realista */}
-            <g transform={`translate(${x}, ${waterTop - 8})`}>
-              {/* Línea de superficie principal - muy visible */}
-              <path 
-                className="wave1" 
-                d={wavePath(w + 240, 6, 32, 0.8)} 
-                fill={`url(#${gradId}-surface)`} 
-                opacity="1"
+                x={shape.content.x}
+                y={shape.content.y + shape.content.h - waterHeight + 10}
+                width={shape.content.w}
+                height={waterHeight - 10}
+                fill={`url(#${gradId})`}
+                opacity="0.7"
               />
-              
-              {/* Segunda capa de ondas */}
-              <path 
-                className="wave2" 
-                d={wavePath(w + 240, 4, 24, 0.6)} 
-                fill={`url(#${gradId}-waves)`} 
-                opacity="0.8"
-              />
-              
-              {/* Tercera capa sutil */}
-              <path 
-                className="wave3" 
-                d={reflectionWavePath(w + 240, 3, 40)} 
-                fill={`url(#${gradId}-reflection)`} 
-                opacity="0.6"
-              />
-            </g>
-
-            {/* Línea de superficie visible para marcar el nivel exacto */}
-            <line
-              x1={x}
-              y1={waterTop}
-              x2={x + w}
-              y2={waterTop}
-              stroke="rgba(255, 255, 255, 0.9)"
-              strokeWidth="2"
-              className="water-surface"
-            />
-
-            {/* Efectos de llenado cuando el nivel cambia */}
-            {level > 0 && level < 100 && (
-              <g transform={`translate(${x + w/2}, ${waterTop + 5})`}>
-                <circle
-                  r="10"
-                  fill="rgba(255, 255, 255, 0.3)"
-                  className="fill-effect"
-                />
-              </g>
             )}
-
-            {/* Efectos de flujo internos (dentro del agua) */}
-            {flowEffects}
-
-            {/* Burbujas mejoradas */}
-            {bubbles}
+            
+            {/* Superficie del agua con ondas */}
+            {level > 5 && (
+              <rect
+                x={shape.content.x}
+                y={shape.content.y + shape.content.h - waterHeight}
+                width={shape.content.w}
+                height="12"
+                fill={`url(#${gradId}-surface)`}
+                className="water-surface"
+              />
+            )}
+            
+            {/* Burbujas cuando hay agua */}
+            {level > 30 && (
+              <>
+                {[...Array(6)].map((_, i) => (
+                <circle
+                    key={i}
+                    cx={shape.content.x + 40 + (i * 35)}
+                    cy={shape.content.y + shape.content.h - waterHeight + 20 + (i * 15)}
+                    r="2"
+                    fill={`url(#${gradId}-bubble)`}
+                    className="water-bubbles"
+                    style={{ animationDelay: `${i * 0.5}s` }}
+                  />
+                ))}
+              </>
+            )}
           </g>
 
           {/* Contorno del tanque */}
           {shape.outline}
 
-          {/* Indicador tipo barra (si se elige) */}
-          {indicator === "bar" && (
-            <g transform={`translate(${12}, ${y})`}>
-              <rect x="0" y="8" width="6" height={h - 16} rx="3" fill={valveColor} />
-            </g>
+
+          {/* Indicador de válvula principal */}
+          {indicator === "chip" && (
+            <div className="absolute top-4 right-4 z-10">
+              <RealisticValve
+                size={120}
+                isOpen={valveOpen}
+                isAnimating={valveSpin}
+                showControls={false}
+                className="valve-indicator"
+              />
+            </div>
           )}
         </svg>
       </div>
@@ -478,171 +368,11 @@ export default function TankViz({
   );
 }
 
-/* ===== Helpers ===== */
 
-function roundedRectPath(x, y, w, h, r) {
-  return [
-    `M ${x + r},${y}`,
-    `H ${x + w - r}`,
-    `A ${r},${r} 0 0 1 ${x + w},${y + r}`,
-    `V ${y + h - r}`,
-    `A ${r},${r} 0 0 1 ${x + w - r},${y + h}`,
-    `H ${x + r}`,
-    `A ${r},${r} 0 0 1 ${x},${y + h - r}`,
-    `V ${y + r}`,
-    `A ${r},${r} 0 0 1 ${x + r},${y}`,
-    "Z",
-  ].join(" ");
-}
-
-// Función mejorada para crear ondas más naturales
-function wavePath(width = 200, amp = 10, period = 24, complexity = 1) {
-  const step = period / 4; // Más puntos para suavidad
-  const midY = amp;
-  let d = `M 0 ${midY}`;
-  
-  for (let xx = 0; xx <= width + step; xx += step) {
-    // Múltiples frecuencias para ondas más naturales
-    const wave1 = Math.sin((xx / period) * Math.PI * 2) * amp * 0.6;
-    const wave2 = Math.sin((xx / (period * 0.7)) * Math.PI * 2) * amp * 0.3;
-    const wave3 = Math.sin((xx / (period * 1.3)) * Math.PI * 2) * amp * 0.1;
-    
-    const yy = midY + (wave1 + wave2 + wave3) * complexity;
-    d += ` L ${xx} ${yy}`;
-  }
-  
-  // Cerrar la forma con una línea suave
-  d += ` L ${width} ${amp * 2 + 40} L 0 ${amp * 2 + 40} Z`;
-  return d;
-}
-
-// Función para ondas de reflexión más sutiles
-function reflectionWavePath(width = 200, amp = 6, period = 32) {
-  const step = period / 3;
-  const midY = amp;
-  let d = `M 0 ${midY}`;
-  
-  for (let xx = 0; xx <= width + step; xx += step) {
-    // Ondas más suaves para reflexión
-    const wave1 = Math.sin((xx / period) * Math.PI * 2) * amp * 0.4;
-    const wave2 = Math.cos((xx / (period * 1.5)) * Math.PI * 2) * amp * 0.2;
-    
-    const yy = midY + wave1 + wave2;
-    d += ` L ${xx} ${yy}`;
-  }
-  
-  d += ` L ${width} ${amp * 2 + 30} L 0 ${amp * 2 + 30} Z`;
-  return d;
-}
 
 /**
- * ValveIcon: Válvula industrial moderna con diseño mejorado
- * - size: px del lado (alto/alto)
- * - color: usa currentColor
- * - stateClass: "valve-open" | "valve-closed" 
- * - className: clases adicionales
+ * roundedRectPath: Genera path SVG para rectángulo redondeado
  */
-function ValveIcon({ size = 42, color = "#10b981", stateClass = "", className = "" }) {
-  return (
-    <div className={`valve-root ${stateClass} ${className}`}>
-      <svg
-        viewBox="0 0 120 120"
-        width={size}
-        height={size}
-        style={{ color }}
-        aria-hidden
-      >
-        {/* Sombra base */}
-        <defs>
-          <radialGradient id="metalGradient" cx="0.3" cy="0.3">
-            <stop offset="0%" stopColor="currentColor" stopOpacity="0.9" />
-            <stop offset="70%" stopColor="currentColor" stopOpacity="0.7" />
-            <stop offset="100%" stopColor="currentColor" stopOpacity="1" />
-          </radialGradient>
-          <filter id="innerShadow">
-            <feGaussianBlur in="SourceAlpha" stdDeviation="2"/>
-            <feOffset dx="1" dy="1" result="offset"/>
-            <feComposite in="SourceGraphic" in2="offset" operator="over"/>
-          </filter>
-        </defs>
-
-        {/* Cuerpo principal de la válvula */}
-        <g className="valve-body" filter="url(#innerShadow)">
-          {/* Base exterior con efecto metálico */}
-          <circle 
-            cx="60" 
-            cy="60" 
-            r="52" 
-            fill="none" 
-            stroke="url(#metalGradient)" 
-            strokeWidth="6"
-          />
-          
-          {/* Anillo intermedio */}
-          <circle 
-            cx="60" 
-            cy="60" 
-            r="42" 
-            fill="none" 
-            stroke="currentColor" 
-            strokeWidth="3"
-            strokeOpacity="0.6"
-          />
-          
-          {/* Centro de la válvula */}
-          <circle 
-            cx="60" 
-            cy="60" 
-            r="30" 
-            fill="none" 
-            stroke="currentColor" 
-            strokeWidth="4"
-          />
-
-          {/* Manija principal - cruz moderna */}
-          <g stroke="currentColor" strokeWidth="5" strokeLinecap="round">
-            <line x1="60" y1="35" x2="60" y2="85" />
-            <line x1="35" y1="60" x2="85" y2="60" />
-          </g>
-
-          {/* Detalles adicionales - líneas de agarre */}
-          <g stroke="currentColor" strokeWidth="2" strokeOpacity="0.7" strokeLinecap="round">
-            <line x1="45" y1="45" x2="75" y2="75" />
-            <line x1="75" y1="45" x2="45" y2="75" />
-          </g>
-
-          {/* Tornillos decorativos en posiciones estratégicas */}
-          <g fill="currentColor" stroke="none">
-            <circle cx="35" cy="25" r="4" opacity="0.8" />
-            <circle cx="85" cy="25" r="4" opacity="0.8" />
-            <circle cx="85" cy="95" r="4" opacity="0.8" />
-            <circle cx="35" cy="95" r="4" opacity="0.8" />
-            
-            {/* Tornillos internos */}
-            <circle cx="45" cy="35" r="2.5" opacity="0.6" />
-            <circle cx="75" cy="35" r="2.5" opacity="0.6" />
-            <circle cx="75" cy="85" r="2.5" opacity="0.6" />
-            <circle cx="45" cy="85" r="2.5" opacity="0.6" />
-          </g>
-
-          {/* Centro sólido con gradiente */}
-          <circle 
-            cx="60" 
-            cy="60" 
-            r="8" 
-            fill="url(#metalGradient)" 
-            stroke="currentColor" 
-            strokeWidth="1"
-          />
-
-          {/* Indicador de dirección */}
-          <polygon 
-            points="60,15 65,25 55,25" 
-            fill="currentColor" 
-            opacity="0.7"
-          />
-        </g>
-      </svg>
-    </div>
-  );
+function roundedRectPath(x, y, w, h, r) {
+  return `M${x + r},${y} L${x + w - r},${y} Q${x + w},${y} ${x + w},${y + r} L${x + w},${y + h - r} Q${x + w},${y + h} ${x + w - r},${y + h} L${x + r},${y + h} Q${x},${y + h} ${x},${y + h - r} L${x},${y + r} Q${x},${y} ${x + r},${y} Z`;
 }

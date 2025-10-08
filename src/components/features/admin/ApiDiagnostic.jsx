@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { CheckCircle, XCircle, Loader, Wifi, WifiOff, Server, Database, AlertTriangle } from 'lucide-react';
 import apiService from '@/services/api';
+import { urlBackend } from '@/config/envs';
 
 export default function ApiDiagnostic() {
   const [results, setResults] = useState({});
@@ -13,9 +14,8 @@ export default function ApiDiagnostic() {
     // Test 1: Conectividad básica
     try {
       const startTime = Date.now();
-      const response = await fetch('https://iot-api-gyes.onrender.com/api/health', {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' }
+      const response = await fetch(`${urlBackend}/api-docs/`, {
+        method: 'GET'
       });
       const endTime = Date.now();
       
@@ -34,14 +34,15 @@ export default function ApiDiagnostic() {
 
     // Test 2: Endpoints de autenticación
     try {
-      const response = await fetch('https://iot-api-gyes.onrender.com/api/auth/status', {
-        method: 'GET',
-        headers: { 'Content-Type': 'application/json' }
+      const response = await fetch(`${urlBackend}/api/user/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email: 'test@test.com', password: 'test' })
       });
       
       newResults.auth = {
-        status: response.ok ? 'success' : 'warning',
-        message: response.ok ? 'Endpoints de auth disponibles' : `Auth endpoint error: ${response.status}`,
+        status: (response.ok || response.status === 401) ? 'success' : 'warning',
+        message: (response.ok || response.status === 401) ? 'Endpoints de auth disponibles' : `Auth endpoint error: ${response.status}`,
         details: `Status: ${response.status}`
       };
     } catch (error) {
@@ -54,14 +55,14 @@ export default function ApiDiagnostic() {
 
     // Test 3: Endpoints de usuarios
     try {
-      const response = await fetch('https://iot-api-gyes.onrender.com/api/users', {
+      const response = await fetch(`${urlBackend}/api/user/users`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' }
       });
       
       newResults.users = {
-        status: response.ok ? 'success' : 'warning',
-        message: response.ok ? 'Endpoints de usuarios disponibles' : `Users endpoint error: ${response.status}`,
+        status: (response.ok || response.status === 401) ? 'success' : 'warning',
+        message: (response.ok || response.status === 401) ? 'Endpoints de usuarios disponibles' : `Users endpoint error: ${response.status}`,
         details: `Status: ${response.status}`
       };
     } catch (error) {
@@ -74,14 +75,14 @@ export default function ApiDiagnostic() {
 
     // Test 4: Endpoints de dispositivos
     try {
-      const response = await fetch('https://iot-api-gyes.onrender.com/api/devices', {
+      const response = await fetch(`${urlBackend}/api/device/device-list`, {
         method: 'GET',
         headers: { 'Content-Type': 'application/json' }
       });
       
       newResults.devices = {
-        status: response.ok ? 'success' : 'warning',
-        message: response.ok ? 'Endpoints de dispositivos disponibles' : `Devices endpoint error: ${response.status}`,
+        status: (response.ok || response.status === 401) ? 'success' : 'warning',
+        message: (response.ok || response.status === 401) ? 'Endpoints de dispositivos disponibles' : `Devices endpoint error: ${response.status}`,
         details: `Status: ${response.status}`
       };
     } catch (error) {
@@ -94,7 +95,7 @@ export default function ApiDiagnostic() {
 
     // Test 5: Documentación API
     try {
-      const response = await fetch('https://iot-api-gyes.onrender.com/api-doc/', {
+      const response = await fetch(`${urlBackend}/api-docs/`, {
         method: 'GET'
       });
       
@@ -172,7 +173,7 @@ export default function ApiDiagnostic() {
           </button>
           
           <div className="text-sm text-gray-600">
-            <strong>Base URL:</strong> https://iot-api-gyes.onrender.com
+            <strong>Base URL:</strong> {urlBackend}
           </div>
         </div>
       </div>
@@ -210,12 +211,12 @@ export default function ApiDiagnostic() {
         <div className="grid md:grid-cols-2 gap-4 text-sm">
           <div>
             <span className="font-medium text-gray-700">URL Base:</span>
-            <p className="text-gray-600">https://iot-api-gyes.onrender.com</p>
+            <p className="text-gray-600">{urlBackend}</p>
           </div>
           <div>
             <span className="font-medium text-gray-700">Documentación:</span>
             <a 
-              href="https://iot-api-gyes.onrender.com/api-doc/" 
+              href={`${urlBackend}/api-docs/`} 
               target="_blank" 
               rel="noopener noreferrer"
               className="text-blue-600 hover:text-blue-800"

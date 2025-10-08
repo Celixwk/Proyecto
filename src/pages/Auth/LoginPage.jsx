@@ -1,10 +1,9 @@
 import React, { useState } from "react";
 import { useNavigate, useLocation, Link } from "react-router-dom";
 import { useAuth } from "@/context/AuthContext";
-import axios from "axios";
 
 export default function LoginPage() {
-  const { login, resetDemo } = useAuth();
+  const { login, resetDemo, createDemoAdmin } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const from = location.state?.from?.pathname || "/app";
@@ -24,7 +23,6 @@ export default function LoginPage() {
     setError("");
     setSubmitting(true);
     try {
-      const response = await axios.post("/api/user/login", form);
       await login(form.email.trim(), form.password);
       navigate(from, { replace: true });
     } catch (err) {
@@ -91,10 +89,15 @@ export default function LoginPage() {
             ¿No tienes cuenta?{" "}
             <Link className="text-blue-600 hover:underline" to="/register">Regístrate</Link>
           </span>
-          {/* DEV only: restablecer datos demo */}
-          <button type="button" onClick={resetDemo} className="text-red-600 hover:underline">
-            Restablecer demo
-          </button>
+          {/* DEV only: botones de debug */}
+          <div className="flex gap-2">
+            <button type="button" onClick={createDemoAdmin} className="text-green-600 hover:underline">
+              Crear Admin
+            </button>
+            <button type="button" onClick={resetDemo} className="text-red-600 hover:underline">
+              Reset Demo
+            </button>
+          </div>
         </div>
       </form>
     </div>

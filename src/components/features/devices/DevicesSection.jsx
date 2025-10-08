@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import {
   Radar, RefreshCw, Plus, MapPin, Wifi, Power, Clock,
-  Droplets, Activity, Settings, Wrench
+  Droplets, Activity, Settings, Wrench, Download
 } from "lucide-react";
 import FirmwareModal from "@/components/features/devices/FirmwareModal";
 import SystemDetailsModal from "@/components/features/devices/SystemDetailsModal";
@@ -13,6 +13,61 @@ const loadSystems = () => {
 };
 const saveSystems = (arr) => {
   try { localStorage.setItem(LS_KEY, JSON.stringify(arr)); } catch {}
+};
+
+// Función para exportar historial de telemetría a CSV
+const exportTelemetryCSV = (system) => {
+  // Generar datos de telemetría simulados (en una app real vendrían de la API)
+  const telemetryData = [];
+  const now = new Date();
+  
+  // Generar datos de los últimos 30 días
+  for (let i = 0; i < 30; i++) {
+    const date = new Date(now.getTime() - (i * 24 * 60 * 60 * 1000));
+    const dayData = [];
+    
+    // Generar 24 horas de datos por día
+    for (let hour = 0; hour < 24; hour++) {
+      const timestamp = new Date(date.getTime() + (hour * 60 * 60 * 1000));
+      const waterLevel = Math.max(0, Math.min(100, 60 + Math.sin(hour / 4) * 20 + Math.random() * 10 - 5));
+      const temperature = 20 + Math.sin(hour / 6) * 5 + Math.random() * 3;
+      const valveStatus = waterLevel > 80 ? 'closed' : 'open';
+      
+      dayData.push({
+        timestamp: timestamp.toISOString(),
+        waterLevel: waterLevel.toFixed(2),
+        temperature: temperature.toFixed(2),
+        valveStatus,
+        signal: Math.floor(85 + Math.random() * 15)
+      });
+    }
+    
+    telemetryData.push(...dayData);
+  }
+  
+  // Crear CSV
+  const headers = ['Timestamp', 'Water Level (%)', 'Temperature (°C)', 'Valve Status', 'Signal (%)'];
+  const csvContent = [
+    headers.join(','),
+    ...telemetryData.map(row => [
+      row.timestamp,
+      row.waterLevel,
+      row.temperature,
+      row.valveStatus,
+      row.signal
+    ].join(','))
+  ].join('\n');
+  
+  // Descargar archivo
+  const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+  const link = document.createElement('a');
+  const url = URL.createObjectURL(blob);
+  link.setAttribute('href', url);
+  link.setAttribute('download', `telemetry_${system.name.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`);
+  link.style.visibility = 'hidden';
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 };
 
 // MIGRACIÓN: junta los 3 dispositivos sueltos (gd_devices) en 1 sistema con controller (ESP32)
@@ -307,6 +362,15 @@ export default function DevicesSection() {
                           }}
                         >
                           Ver detalles
+                        </button>
+
+                        <button
+                          className={btn.outline}
+                          onClick={() => exportTelemetryCSV(sys)}
+                          title="Exportar historial de telemetría a CSV"
+                        >
+                          <Download className="h-3 w-3" />
+                          Exportar CSV
                         </button>
 
                         <button

@@ -1,5 +1,6 @@
 import React from 'react';
 import { Settings } from 'lucide-react';
+import ValveDemo from './ValveDemo';
 
 const ValveSection = () => {
   return (
@@ -113,6 +114,9 @@ const ValveSection = () => {
           </div>
         </div>
       </div>
+
+      {/* Demostración Interactiva de la Válvula */}
+      <ValveDemo />
     </div>
   );
 };

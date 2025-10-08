@@ -1,5 +1,6 @@
 import React from 'react';
 import { Activity, Gauge, Zap } from 'lucide-react';
+import SensorDemo from './SensorDemo';
 
 const SensorSection = () => {
   return (
@@ -119,6 +120,9 @@ const SensorSection = () => {
           </div>
         </div>
       </div>
+
+      {/* Demostración Interactiva del Sensor */}
+      <SensorDemo />
     </div>
   );
 };
